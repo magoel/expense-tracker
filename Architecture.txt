@@ -1,0 +1,266 @@
+I'll create a detailed prompt that describes this expense tracker web application, its architecture, features, and components. This prompt could be used to explain the project to others or to guide someone who wants to build a similar application.
+
+# Expense Tracker Web Application - Complete Project Prompt
+
+## Project Overview
+Create a full-stack web application for tracking group expenses with the following capabilities:
+- Track expenses shared within different groups of people
+- Split costs proportionally or equally between group members
+- Visualize spending patterns and balances
+- Manage payments and settlements
+- Support both mobile and desktop use as a Progressive Web App (PWA)
+
+## Technology Stack
+
+### Frontend
+- **Framework**: React.js with TypeScript
+- **Build Tool**: Vite
+- **UI Library**: Material UI
+- **State Management**: Zustand
+- **HTTP Client**: Axios
+- **Routing**: React Router
+- **Charts**: Chart.js with React-Chartjs-2
+- **Date Handling**: Day.js
+- **PWA Support**: Service workers and manifest
+
+### Backend
+- **Framework**: Node.js with Express
+- **Language**: TypeScript
+- **ORM**: Sequelize with PostgreSQL
+- **Authentication**: JWT and Google OAuth
+- **Password Hashing**: bcrypt
+- **File Upload**: Multer
+- **Validation**: Joi
+- **Logging**: Winston, ELK stack
+
+### Infrastructure
+- **Containerization**: Docker with docker-compose
+- **Database**: PostgreSQL
+- **API Gateway**: Nginx
+- **Caching**: Redis (for sessions)
+- **Monitoring**: Prometheus
+- **Logging**: ELK Stack (Elasticsearch, Logstash, Kibana)
+
+## Database Schema
+
+### Users Table
+- id (PK)
+- email
+- password (hashed)
+- firstName
+- lastName
+- avatarUrl
+- authProvider (local/google)
+- providerUserId
+- createdAt
+- updatedAt
+
+### Groups Table
+- id (PK)
+- name
+- description
+- code (unique invite code)
+- currency
+- createdAt
+- updatedAt
+
+### GroupMembers Table
+- id (PK)
+- groupId (FK to Groups)
+- userId (FK to Users)
+- isAdmin
+- status (pending/active/inactive)
+- createdAt
+- updatedAt
+
+### Expenses Table
+- id (PK)
+- groupId (FK to Groups)
+- paidById (FK to Users - who paid)
+- amount
+- description
+- date
+- receiptUrl (optional)
+- createdAt
+- updatedAt
+
+### ExpenseShares Table
+- id (PK)
+- expenseId (FK to Expenses)
+- userId (FK to Users)
+- amount
+- isPaid
+- paidAt
+- createdAt
+- updatedAt
+
+### Payments Table
+- id (PK)
+- groupId (FK to Groups)
+- payerId (FK to Users)
+- receiverId (FK to Users)
+- amount
+- description
+- createdAt
+- updatedAt
+
+## Core Features
+
+### User Management
+1. Registration with email/password
+2. Login with JWT authentication
+3. Google OAuth integration
+4. User profile management
+5. Avatar upload
+
+### Group Management
+1. Create groups with name, description, and currency
+2. Generate unique invite codes
+3. Join groups via invite code
+4. Manage group members
+5. Leave groups
+
+### Expense Tracking
+1. Add expenses with description, amount, date
+2. Upload receipt images
+3. Split expenses (equally or with custom amounts)
+4. Mark expenses as paid/unpaid
+5. Edit or delete expenses
+
+### Payment Processing
+1. Record payments between users
+2. Track debt settlements
+3. Payment recommendations
+4. Payment history
+
+### Statistics and Visualization
+1. View expenses by time period (day/week/month/year)
+2. Expense distribution by payer
+3. Current balances between members
+4. Export data to CSV
+
+## Application Architecture
+
+### Docker Container Structure
+- **frontend**: React application
+- **backend**: Express API
+- **database**: PostgreSQL 
+- **redis**: Session storage
+- **nginx**: API gateway and static file server
+- **elasticsearch**: Log storage and indexing
+- **logstash**: Log processing pipeline
+- **kibana**: Log visualization dashboard
+- **prometheus**: Metrics collection and monitoring
+
+### Frontend Structure
+1. **Layout Components**
+   - Main Layout (authenticated users)
+   - Auth Layout (login/register pages)
+
+2. **Page Components**
+   - Dashboard Page (summaries and recent activity)
+   - Groups Pages (listing, detail, creation)
+   - Expenses Pages (listing, creation, detail)
+   - Payments Pages (listing, creation)
+   - Statistics Page (charts and data visualization)
+   - Profile Page (user settings)
+
+3. **Authentication**
+   - Protected routes with auth guards
+   - JWT storage and refreshing
+   - OAuth flow
+
+### Backend Structure
+1. **API Routes**
+   - Auth routes (/auth/*)
+   - Group routes (/groups/*)
+   - Expense routes (/expenses/*)
+   - Payment routes (/payments/*)
+   - Statistics routes (/stats/*)
+   - User routes (/user/*)
+
+2. **Middleware**
+   - Error handling
+   - Authentication/Authorization
+   - Validation
+   - Logging
+
+3. **Controllers**
+   - Business logic for each domain entity
+   - Data processing
+   - Response formatting
+
+4. **Models**
+   - Sequelize ORM definitions
+   - Associations between entities
+
+## Implementation Steps
+
+### Step 1: Setup Project Structure
+1. Initialize frontend with Vite + React + TypeScript
+2. Initialize backend with Node.js + Express + TypeScript
+3. Create Docker configuration
+4. Set up database schema
+
+### Step 2: Backend Implementation
+1. Set up Express with middlewares
+2. Implement Sequelize models and associations
+3. Create authentication system with JWT and Google OAuth
+4. Implement controllers for all entities
+5. Set up file upload for receipts
+6. Configure logging and monitoring
+
+### Step 3: Frontend Implementation
+1. Create layout components
+2. Set up routing with React Router
+3. Implement authentication flow
+4. Create all page components
+5. Set up state management with Zustand
+6. Integrate Material UI components
+7. Implement responsive design
+8. Add charts and visualizations
+
+### Step 4: Infrastructure Setup
+1. Configure Nginx as API gateway
+2. Set up Redis for session management
+3. Configure ELK stack for logging
+4. Set up Prometheus for monitoring
+5. Create docker-compose configuration
+
+### Step 5: Testing and Deployment
+1. Write unit and integration tests
+2. Set up CI/CD pipeline
+3. Configure production environment
+4. Deploy to cloud provider
+
+## Additional Features for Future Expansion
+1. Real-time notifications using WebSockets
+2. Integration with payment providers (PayPal, Stripe)
+3. Currency conversion for international groups
+4. Mobile apps (React Native)
+5. AI-based expense categorization
+6. Microservices architecture
+7. GraphQL API
+8. Budget planning features
+
+## Implementation Guidelines
+
+### Best Practices
+1. Use TypeScript interfaces for all data models
+2. Implement proper error handling throughout
+3. Use environment variables for configuration
+4. Follow REST API design principles
+5. Use transaction management for related database operations
+6. Implement unit tests for critical components
+7. Use Docker for consistent development environments
+8. Implement security best practices (HTTPS, input validation, etc.)
+
+### User Experience Considerations
+1. Responsive design for all screen sizes
+2. Intuitive navigation
+3. Loading states and error handling
+4. Accessibility compliance
+5. Offline support through PWA
+6. Smooth animations and transitions
+
+This comprehensive prompt covers all aspects of building a group expense tracking web application, from architecture design to implementation details. Following this guide will result in a robust, scalable, and user-friendly application that effectively solves the problem of tracking shared expenses among groups.
