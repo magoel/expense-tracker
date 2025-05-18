@@ -1,0 +1,413 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Button,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid,
+  InputAdornment,
+  Alert,
+  CircularProgress,
+  FormHelperText,
+  SelectChangeEvent,
+  Autocomplete
+} from '@mui/material';
+import { useAuthStore } from '../../stores/authStore';
+import { api } from '../../api';
+import { formatCurrency } from '../../utils/formatters';
+
+interface Group {
+  id: number;
+  name: string;
+  currency: string;
+  members: GroupMember[];
+}
+
+interface GroupMember {
+  id: number;
+  userId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatarUrl?: string;
+}
+
+interface Balance {
+  userId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  balance: number;
+}
+
+interface PaymentSuggestion {
+  from: {
+    userId: number;
+    name: string;
+  };
+  to: {
+    userId: number;
+    name: string;
+  };
+  amount: number;
+}
+
+const CreatePaymentPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuthStore();
+  const searchParams = new URLSearchParams(location.search);
+  const groupIdParam = searchParams.get('groupId');
+
+  // State
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [amount, setAmount] = useState<number | ''>('');
+  const [description, setDescription] = useState('');
+  const [selectedReceiverId, setSelectedReceiverId] = useState<number | null>(null);
+  const [balances, setBalances] = useState<Balance[]>([]);
+  const [suggestions, setSuggestions] = useState<PaymentSuggestion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingGroups, setLoadingGroups] = useState(true);
+  const [loadingBalances, setLoadingBalances] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Fetch groups on mount
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const response = await api.get('/groups');
+        setGroups(response.data.data.groups);
+        
+        // If groupId is in URL, select that group
+        if (groupIdParam) {
+          const selectedGroup = response.data.data.groups.find(
+            (g: Group) => g.id === parseInt(groupIdParam)
+          );
+          
+          if (selectedGroup) {
+            handleGroupSelect(selectedGroup.id);
+          }
+        }
+        
+        setLoadingGroups(false);
+      } catch (error) {
+        console.error('Error fetching groups', error);
+        setLoadingGroups(false);
+      }
+    };
+    
+    fetchGroups();
+  }, [groupIdParam]);
+  
+  // Handle group selection
+  const handleGroupSelect = async (groupId: number) => {
+    try {
+      setLoadingBalances(true);
+      
+      // Fetch group details with members
+      const groupResponse = await api.get(`/groups/${groupId}`);
+      const group = groupResponse.data.data.group;
+      setSelectedGroup(group);
+      
+      // Fetch balances for the group
+      const balancesResponse = await api.get(`/stats/group/${groupId}/balances`);
+      setBalances(balancesResponse.data.data.balances);
+      
+      // Fetch payment suggestions
+      const suggestionsResponse = await api.get(`/stats/group/${groupId}/payment-suggestions`);
+      setSuggestions(suggestionsResponse.data.data.suggestions);
+      
+      setLoadingBalances(false);
+    } catch (error) {
+      console.error('Error fetching group details and balances', error);
+      setLoadingBalances(false);
+    }
+  };
+  
+  // Handle group change
+  const handleGroupChange = (event: SelectChangeEvent<number>) => {
+    handleGroupSelect(event.target.value as number);
+  };
+  
+  // Get suggested amount based on balances
+  const getSuggestedAmount = () => {
+    if (!selectedGroup || !selectedReceiverId || balances.length === 0) {
+      return 0;
+    }
+    
+    // Find current user balance
+    const userBalance = balances.find(b => b.userId === user?.id);
+    if (!userBalance || userBalance.balance >= 0) {
+      return 0;
+    }
+    
+    // Find receiver balance
+    const receiverBalance = balances.find(b => b.userId === selectedReceiverId);
+    if (!receiverBalance || receiverBalance.balance <= 0) {
+      return 0;
+    }
+    
+    // Suggest the minimum of what user owes and what receiver is owed
+    const userOwes = Math.abs(userBalance.balance);
+    const receiverIsOwed = receiverBalance.balance;
+    
+    return Math.min(userOwes, receiverIsOwed);
+  };
+  
+  // Apply suggestion
+  const applySuggestion = (suggestion: PaymentSuggestion) => {
+    if (suggestion.from.userId === user?.id) {
+      setSelectedReceiverId(suggestion.to.userId);
+      setAmount(suggestion.amount);
+    }
+  };
+  
+  // Validate form
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!selectedGroup) {
+      newErrors.group = 'Please select a group';
+    }
+    
+    if (!selectedReceiverId) {
+      newErrors.receiver = 'Please select a person to pay';
+    }
+    
+    if (!amount || amount <= 0) {
+      newErrors.amount = 'Please enter a valid amount';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+  
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setSubmitError(null);
+      
+      await api.post('/payments', {
+        groupId: selectedGroup?.id,
+        receiverId: selectedReceiverId,
+        amount,
+        description
+      });
+      
+      // Navigate to group detail page
+      navigate(`/groups/${selectedGroup?.id}`);
+    } catch (error: any) {
+      console.error('Error creating payment', error);
+      setSubmitError(error.response?.data?.message || 'Failed to record payment');
+      setLoading(false);
+    }
+  };
+  
+  // Get list of people user can pay
+  const getPossibleReceivers = () => {
+    if (!selectedGroup || !selectedGroup.members) {
+      return [];
+    }
+    
+    // Filter out current user
+    return selectedGroup.members.filter(member => member.userId !== user?.id);
+  };
+  
+  // Get user-specific suggestions
+  const getUserSuggestions = () => {
+    return suggestions.filter(suggestion => suggestion.from.userId === user?.id);
+  };
+  
+  if (loadingGroups) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+  
+  return (
+    <Box sx={{ maxWidth: 800, mx: 'auto', mt: 2 }}>
+      <Typography variant="h4" sx={{ mb: 3 }}>Record a Payment</Typography>
+      
+      {submitError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {submitError}
+        </Alert>
+      )}
+      
+      <form onSubmit={handleSubmit}>
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <FormControl fullWidth error={!!errors.group}>
+                  <InputLabel id="group-label">Group</InputLabel>
+                  <Select
+                    labelId="group-label"
+                    id="group"
+                    value={selectedGroup?.id || ''}
+                    label="Group"
+                    onChange={handleGroupChange}
+                    disabled={!!groupIdParam}
+                  >
+                    {groups.map((group) => (
+                      <MenuItem key={group.id} value={group.id}>{group.name}</MenuItem>
+                    ))}
+                  </Select>
+                  {errors.group && <FormHelperText>{errors.group}</FormHelperText>}
+                </FormControl>
+              </Grid>
+              
+              {selectedGroup && (
+                <>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth error={!!errors.receiver}>
+                      <InputLabel id="receiver-label">Pay To</InputLabel>
+                      <Select
+                        labelId="receiver-label"
+                        id="receiver"
+                        value={selectedReceiverId || ''}
+                        label="Pay To"
+                        onChange={(e) => setSelectedReceiverId(e.target.value as number)}
+                        disabled={loadingBalances}
+                      >
+                        {getPossibleReceivers().map((member) => (
+                          <MenuItem key={member.userId} value={member.userId}>
+                            {member.firstName} {member.lastName}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {errors.receiver && <FormHelperText>{errors.receiver}</FormHelperText>}
+                    </FormControl>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Amount"
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">{selectedGroup.currency}</InputAdornment>
+                        )
+                      }}
+                      error={!!errors.amount}
+                      helperText={errors.amount}
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Description (Optional)"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                  </Grid>
+                </>
+              )}
+            </Grid>
+          </CardContent>
+        </Card>
+        
+        {selectedGroup && balances.length > 0 && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>Payment Suggestions</Typography>
+              
+              {loadingBalances ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : getUserSuggestions().length > 0 ? (
+                <Grid container spacing={2}>
+                  {getUserSuggestions().map((suggestion, index) => (
+                    <Grid item xs={12} key={index}>
+                      <Alert 
+                        severity="info"
+                        sx={{ 
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="body2">
+                            Suggestion: Pay {formatCurrency(suggestion.amount, selectedGroup.currency)} to {suggestion.to.name}
+                          </Typography>
+                        </Box>
+                        <Button 
+                          size="small" 
+                          variant="outlined"
+                          onClick={() => applySuggestion(suggestion)}
+                        >
+                          Apply
+                        </Button>
+                      </Alert>
+                    </Grid>
+                  ))}
+                </Grid>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No payment suggestions available for you at this time.
+                </Typography>
+              )}
+              
+              {selectedReceiverId && amount && (
+                <Box sx={{ mt: 2 }}>
+                  <Alert severity="success">
+                    <Typography variant="body2">
+                      You're about to pay {formatCurrency(amount as number, selectedGroup.currency)} to {
+                        getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.firstName || ''
+                      } {
+                        getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.lastName || ''
+                      }
+                    </Typography>
+                  </Alert>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        )}
+        
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button 
+            type="button" 
+            onClick={() => navigate(-1)} 
+            sx={{ mr: 2 }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            variant="contained" 
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Record Payment'}
+          </Button>
+        </Box>
+      </form>
+    </Box>
+  );
+};
+
+export default CreatePaymentPage;
