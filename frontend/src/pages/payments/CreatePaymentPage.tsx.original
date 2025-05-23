@@ -1,0 +1,479 @@
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Button,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Grid,
+  InputAdornment,
+  Alert,
+  CircularProgress,
+  FormHelperText,
+  SelectChangeEvent
+} from '@mui/material';
+import { useAuthStore } from '../../stores/authStore';
+import { api } from '../../api';
+import { formatCurrency } from '../../utils/formatters';
+import { DatePicker } from '@mui/x-date-pickers';
+import dayjs, { Dayjs } from 'dayjs';
+
+interface Group {
+  id: number;
+  name: string;
+  currency: string;
+  members: GroupMember[];
+}
+
+interface GroupMember {
+  id: number;
+  userId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  avatarUrl?: string;
+}
+
+interface Balance {
+  userId: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  balance: number;
+}
+
+interface PaymentSuggestion {
+  from: {
+    id: number;
+    name: string;
+  };
+  to: {
+    id: number;
+    name: string;
+  };
+  amount: number;
+}
+
+interface ExpenseShare {
+  id: number;
+  userId: number;
+  expenseId: number;
+  amount: number;
+  isPaid: boolean;
+  expense: {
+    description: string;
+    date: string;
+    paidById: number;
+  };
+  user: {
+    firstName: string;
+    lastName: string;
+  };
+}
+
+const CreatePaymentPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuthStore();
+  const searchParams = new URLSearchParams(location.search);
+  const groupIdParam = searchParams.get('groupId');
+  const receiverIdParam = searchParams.get('receiverId');
+  const amountParam = searchParams.get('amount');
+
+  // State
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [selectedReceiverId, setSelectedReceiverId] = useState<number | ''>('');
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState<number | ''>('');
+  const [date, setDate] = useState<Dayjs | null>(dayjs());
+  const [balances, setBalances] = useState<Balance[]>([]);
+  const [paymentSuggestions, setPaymentSuggestions] = useState<PaymentSuggestion[]>([]);
+  const [unpaidExpenses, setUnpaidExpenses] = useState<ExpenseShare[]>([]);
+  const [selectedExpenseShares, setSelectedExpenseShares] = useState<number[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingGroups, setLoadingGroups] = useState(true);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Fetch groups on mount
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const response = await api.get('/groups');
+        setGroups(response.data.data.groups);
+        
+        // If groupId is in URL, select that group
+        if (groupIdParam) {
+          const groupId = parseInt(groupIdParam, 10);
+          await handleGroupSelect(groupId);
+          
+          // If receiverId and amount are in URL, fill those in
+          if (receiverIdParam) {
+            setSelectedReceiverId(parseInt(receiverIdParam, 10));
+          }
+          
+          if (amountParam) {
+            setAmount(parseFloat(amountParam));
+          }
+        }
+        
+        setLoadingGroups(false);
+      } catch (error) {
+        console.error('Error fetching groups', error);
+        setLoadingGroups(false);
+      }
+    };
+    
+    fetchGroups();
+  }, [groupIdParam, receiverIdParam, amountParam]);
+  
+  // Handle group selection
+  const handleGroupSelect = async (groupId: number) => {
+    try {
+      const groupResponse = await api.get(`/groups/${groupId}`);
+      const group = groupResponse.data.data.group;
+      setSelectedGroup(group);
+      
+      // Fetch balances for the group
+      const balancesResponse = await api.get(`/stats/group/${groupId}/balances`);
+      setBalances(balancesResponse.data.data.balances);
+      
+      // Fetch payment suggestions
+      const suggestionsResponse = await api.get(`/stats/group/${groupId}/payment-suggestions`);
+      setPaymentSuggestions(suggestionsResponse.data.data.paymentSuggestions);
+      
+      // Fetch unpaid expenses for the user
+      const unpaidResponse = await api.get(`/expenses/group/${groupId}/unpaid`);
+      setUnpaidExpenses(unpaidResponse.data.data.expenseShares);
+      
+      // Reset other payment fields
+      if (!receiverIdParam) {
+        setSelectedReceiverId('');
+      }
+      
+      if (!amountParam) {
+        setAmount('');
+      }
+      
+      setSelectedExpenseShares([]);
+    } catch (error) {
+      console.error('Error fetching group details', error);
+    }
+  };
+  
+  // Handle group change
+  const handleGroupChange = (event: SelectChangeEvent<number>) => {
+    handleGroupSelect(event.target.value as number);
+  };
+  
+  // Toggle expense share selection
+  const toggleExpenseShare = (shareId: number, shareAmount: number) => {
+    setSelectedExpenseShares(prev => {
+      const isSelected = prev.includes(shareId);
+      
+      if (isSelected) {
+        // Deselect expense share
+        return prev.filter(id => id !== shareId);
+      } else {
+        // Select expense share
+        return [...prev, shareId];
+      }
+    });
+  };
+  
+  // Apply payment suggestion
+  const applySuggestion = (suggestion: PaymentSuggestion) => {
+    if (suggestion.from.id === user?.id) {
+      setSelectedReceiverId(suggestion.to.id);
+      setAmount(suggestion.amount);
+    }
+  };
+  
+  // Validate form
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!selectedGroup) {
+      newErrors.group = 'Please select a group';
+    }
+    
+    if (!selectedReceiverId) {
+      newErrors.receiver = 'Please select a recipient';
+    }
+    
+    if (!amount || amount <= 0) {
+      newErrors.amount = 'Please enter a valid amount';
+    }
+    
+    if (!date) {
+      newErrors.date = 'Date is required';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+  
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setSubmitError(null);
+      
+      const paymentData: Record<string, any> = {
+        groupId: selectedGroup?.id,
+        receiverId: selectedReceiverId,
+        amount,
+        description: description.trim() || 'Payment',
+        date: date?.toISOString(),
+      };
+      
+      // Include expense shares if selected
+      if (selectedExpenseShares.length > 0) {
+        paymentData.expenseShareIds = selectedExpenseShares;
+      }
+      
+      // Create payment
+      await api.post('/payments', paymentData);
+      
+      // Navigate back to group detail page
+      navigate(`/groups/${selectedGroup?.id}`);
+    } catch (error: any) {
+      console.error('Error creating payment', error);
+      setSubmitError(error.response?.data?.message || 'Failed to create payment');
+      setLoading(false);
+    }
+  };
+  
+  const getMemberName = (userId: number) => {
+    if (!selectedGroup) return '';
+    
+    const member = selectedGroup.members.find(m => m.userId === userId);
+    return member ? `${member.firstName} ${member.lastName}` : '';
+  };
+  
+  if (loadingGroups) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+  
+  return (
+    <Box sx={{ maxWidth: 800, mx: 'auto', mt: 2 }}>
+      <Typography variant="h4" sx={{ mb: 3 }}>Create Payment</Typography>
+      
+      {submitError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {submitError}
+        </Alert>
+      )}
+      
+      <form onSubmit={handleSubmit}>
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 2 }}>Payment Details</Typography>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <FormControl fullWidth error={!!errors.group}>
+                  <InputLabel id="group-label">Group</InputLabel>
+                  <Select
+                    labelId="group-label"
+                    id="group"
+                    value={selectedGroup?.id || ''}
+                    label="Group"
+                    onChange={handleGroupChange}
+                    disabled={!!groupIdParam}
+                  >
+                    {groups.map((group) => (
+                      <MenuItem key={group.id} value={group.id}>{group.name}</MenuItem>
+                    ))}
+                  </Select>
+                  {errors.group && <FormHelperText>{errors.group}</FormHelperText>}
+                </FormControl>
+              </Grid>
+              
+              {selectedGroup && (
+                <>
+                  <Grid item xs={12}>
+                    <FormControl fullWidth error={!!errors.receiver}>
+                      <InputLabel id="receiver-label">Pay to</InputLabel>
+                      <Select
+                        labelId="receiver-label"
+                        id="receiver"
+                        value={selectedReceiverId}
+                        label="Pay to"
+                        onChange={(e) => setSelectedReceiverId(e.target.value as number)}
+                      >
+                        {selectedGroup.members
+                          .filter(member => member.userId !== user?.id) // Filter out current user
+                          .map((member) => (
+                            <MenuItem key={member.userId} value={member.userId}>
+                              {member.firstName} {member.lastName}
+                            </MenuItem>
+                          ))
+                        }
+                      </Select>
+                      {errors.receiver && <FormHelperText>{errors.receiver}</FormHelperText>}
+                    </FormControl>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      label="Amount"
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">{selectedGroup.currency}</InputAdornment>
+                        )
+                      }}
+                      error={!!errors.amount}
+                      helperText={errors.amount}
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <DatePicker
+                      label="Date"
+                      value={date}
+                      onChange={(newDate) => setDate(newDate)}
+                    />
+                    {errors.date && (
+                      <FormHelperText error>{errors.date}</FormHelperText>
+                    )}
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Description (optional)"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                  </Grid>
+                </>
+              )}
+            </Grid>
+          </CardContent>
+        </Card>
+        
+        {selectedGroup && paymentSuggestions.length > 0 && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>Payment Suggestions</Typography>
+              
+              <Grid container spacing={2}>
+                {paymentSuggestions
+                  .filter(suggestion => suggestion.from.id === user?.id)
+                  .map((suggestion, index) => (
+                    <Grid item xs={12} key={index}>
+                      <Button
+                        fullWidth
+                        variant="outlined"
+                        onClick={() => applySuggestion(suggestion)}
+                        sx={{ justifyContent: 'flex-start', textTransform: 'none', py: 1 }}
+                      >
+                        <Box sx={{ textAlign: 'left' }}>
+                          <Typography>
+                            Pay {selectedGroup.currency} {suggestion.amount.toFixed(2)} to {suggestion.to.name}
+                          </Typography>
+                        </Box>
+                      </Button>
+                    </Grid>
+                  ))}
+                  
+                {paymentSuggestions.filter(suggestion => suggestion.from.id === user?.id).length === 0 && (
+                  <Grid item xs={12}>
+                    <Alert severity="info">
+                      No payment suggestions available for you in this group.
+                    </Alert>
+                  </Grid>
+                )}
+              </Grid>
+            </CardContent>
+          </Card>
+        )}
+        
+        {selectedGroup && unpaidExpenses.length > 0 && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>Link to Unpaid Expenses</Typography>
+              
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Optionally select expenses this payment should cover
+              </Alert>
+              
+              <Grid container spacing={2}>
+                {unpaidExpenses.map((share) => (
+                  <Grid item xs={12} key={share.id}>
+                    <Card variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        cursor: 'pointer',
+                        border: selectedExpenseShares.includes(share.id) ? '2px solid' : '1px solid',
+                        borderColor: selectedExpenseShares.includes(share.id) ? 'primary.main' : 'divider'
+                      }}
+                      onClick={() => toggleExpenseShare(share.id, share.amount)}
+                    >
+                      <Grid container alignItems="center">
+                        <Grid item xs>
+                          <Typography variant="body1">
+                            {share.expense.description}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {dayjs(share.expense.date).format('MMM D, YYYY')} • Owed to {getMemberName(share.expense.paidById)}
+                          </Typography>
+                        </Grid>
+                        <Grid item>
+                          <Typography variant="body1" fontWeight="bold">
+                            {selectedGroup.currency} {share.amount.toFixed(2)}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </CardContent>
+          </Card>
+        )}
+        
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button 
+            type="button" 
+            onClick={() => navigate(-1)} 
+            sx={{ mr: 2 }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            variant="contained" 
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Create Payment'}
+          </Button>
+        </Box>
+      </form>
+    </Box>
+  );
+};
+
+export default CreatePaymentPage;

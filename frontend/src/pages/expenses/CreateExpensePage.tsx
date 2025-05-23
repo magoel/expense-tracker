@@ -15,38 +15,36 @@ import {
   Grid,
   Paper,
   InputAdornment,
-  IconButton,
   Alert,
   CircularProgress,
   FormHelperText,
   SelectChangeEvent,
-  Autocomplete
 } from '@mui/material';
 import {
-  Add as AddIcon,
-  Remove as RemoveIcon,
   Receipt as ReceiptIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../api';
-import { formatCurrency } from '../../utils/formatters';
 import { DatePicker } from '@mui/x-date-pickers';
-import dayjs, { Dayjs } from 'dayjs';
+// Removed dayjs import
 
 interface Group {
   id: number;
   name: string;
   currency: string;
-  members: GroupMember[];
-}
-
-interface GroupMember {
-  id: number;
-  userId: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  avatarUrl?: string;
+  memberships?: {
+    id: number;
+    userId: number;
+    groupId: number;
+    status: string;
+    user: {
+      id: number;
+      firstName: string;
+      lastName: string;
+      email: string;
+      avatarUrl?: string;
+    };
+  }[];
 }
 
 interface ExpenseShare {
@@ -68,7 +66,7 @@ const CreateExpensePage = () => {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState<number | ''>(0);
-  const [date, setDate] = useState<Dayjs | null>(dayjs());
+  const [date, setDate] = useState<Date | null>(new Date());
   const [receipt, setReceipt] = useState<File | null>(null);
   const [splitMethod, setSplitMethod] = useState('equal');
   const [shares, setShares] = useState<ExpenseShare[]>([]);
@@ -114,17 +112,24 @@ const CreateExpensePage = () => {
       
       setSelectedGroup(group);
       
-      // Initialize shares with all members (equal split)
-      if (splitMethod === 'equal' && group.members) {
-        const equalAmount = (amount || 0) / group.members.length;
-        const newShares = group.members.map((member: GroupMember) => ({
-          userId: member.userId,
+      // Process members from memberships
+      if (group.memberships && group.memberships.length > 0) {
+        const members = group.memberships.map((membership: any) => membership.user);
+        
+        // ALWAYS initialize shares with all members (equal split by default)
+        const currentAmount = amount || 0;
+        const equalAmount = currentAmount / members.length;
+        const newShares = members.map((member: any) => ({
+          userId: member.id,
           amount: parseFloat(equalAmount.toFixed(2)),
           name: `${member.firstName} ${member.lastName}`,
           email: member.email
         }));
         
         setShares(newShares);
+        console.log('Shares initialized:', newShares);
+      } else {
+        console.warn('Group has no members to split expense with');
       }
     } catch (error) {
       console.error('Error fetching group details', error);
@@ -142,16 +147,23 @@ const CreateExpensePage = () => {
     setAmount(newAmount);
     
     // Update shares if using equal split
-    if (splitMethod === 'equal' && selectedGroup && newAmount !== '' && selectedGroup.members) {
-      const equalAmount = newAmount / selectedGroup.members.length;
-      const newShares = selectedGroup.members.map((member: GroupMember) => ({
-        userId: member.userId,
-        amount: parseFloat(equalAmount.toFixed(2)),
-        name: `${member.firstName} ${member.lastName}`,
-        email: member.email
-      }));
-      
-      setShares(newShares);
+    if (selectedGroup && selectedGroup.memberships && selectedGroup.memberships.length > 0) {
+      // Always update shares when amount changes, but respect the split method
+      if (splitMethod === 'equal' && newAmount !== '') {
+        const members = selectedGroup.memberships.map((membership: any) => membership.user);
+        const equalAmount = newAmount / members.length;
+        const newShares = members.map((member: any) => ({
+          userId: member.id,
+          amount: parseFloat(equalAmount.toFixed(2)),
+          name: `${member.firstName} ${member.lastName}`,
+          email: member.email
+        }));
+        
+        console.log('Shares updated due to amount change:', newShares);
+        setShares(newShares);
+      }
+    } else {
+      console.warn('Cannot update shares: No group selected or group has no members');
     }
   };
   
@@ -160,21 +172,23 @@ const CreateExpensePage = () => {
     const newSplitMethod = event.target.value;
     setSplitMethod(newSplitMethod);
     
-    if (newSplitMethod === 'equal' && selectedGroup && amount !== '' && selectedGroup.members) {
+    if (newSplitMethod === 'equal' && selectedGroup && amount !== '' && selectedGroup.memberships) {
       // Set equal shares
-      const equalAmount = (amount as number) / selectedGroup.members.length;
-      const newShares = selectedGroup.members.map((member: GroupMember) => ({
-        userId: member.userId,
+      const members = selectedGroup.memberships.map(membership => membership.user);
+      const equalAmount = (amount as number) / members.length;
+      const newShares = members.map(member => ({
+        userId: member.id,
         amount: parseFloat(equalAmount.toFixed(2)),
         name: `${member.firstName} ${member.lastName}`,
         email: member.email
       }));
       
       setShares(newShares);
-    } else if (newSplitMethod === 'exact' && selectedGroup && selectedGroup.members) {
+    } else if (newSplitMethod === 'exact' && selectedGroup && selectedGroup.memberships) {
       // Initialize exact shares with zero
-      const newShares = selectedGroup.members.map((member: GroupMember) => ({
-        userId: member.userId,
+      const members = selectedGroup.memberships.map(membership => membership.user);
+      const newShares = members.map(member => ({
+        userId: member.id,
         amount: 0,
         name: `${member.firstName} ${member.lastName}`,
         email: member.email
@@ -225,7 +239,10 @@ const CreateExpensePage = () => {
       newErrors.date = 'Date is required';
     }
     
-    if (splitMethod === 'exact') {
+    // Check if shares exist
+    if (shares.length === 0) {
+      newErrors.shares = 'No members to split expense with';
+    } else if (splitMethod === 'exact') {
       const totalShareAmount = shares.reduce((sum, share) => sum + share.amount, 0);
       if (Math.abs(totalShareAmount - (amount || 0)) > 0.01) {
         newErrors.shares = 'The sum of shares must equal the expense amount';
@@ -249,17 +266,39 @@ const CreateExpensePage = () => {
       setSubmitError(null);
       
       // Prepare share data
+      let sharesToUse = [...shares]; // Create a copy of the current shares
+      
+      // If shares array is empty and a group is selected, calculate shares immediately (not using state)
+      if (sharesToUse.length === 0 && selectedGroup && selectedGroup.memberships) {
+        const members = selectedGroup.memberships.map(membership => membership.user);
+        const equalAmount = (amount as number) / members.length;
+        sharesToUse = members.map(member => ({
+          userId: member.id,
+          amount: parseFloat(equalAmount.toFixed(2)),
+          name: `${member.firstName} ${member.lastName}`,
+          email: member.email
+        }));
+        // Update state for UI, but don't rely on it for API call
+        setShares(sharesToUse);
+      }
+      
+      // Prepare share data from our local array, not from state
       const shareData: Record<number, number> = {};
-      shares.forEach(share => {
+      sharesToUse.forEach(share => {
         shareData[share.userId] = share.amount;
       });
+      
+      // Ensure shares are not empty
+      if (Object.keys(shareData).length === 0) {
+        throw new Error("No shares found. Please ensure expense is split among group members.");
+      }
       
       // Create expense
       const createResponse = await api.post('/expenses', {
         groupId: selectedGroup?.id,
         amount,
         description,
-        date: date?.toISOString(),
+        date: date ? date.toISOString() : new Date().toISOString(),
         shares: shareData
       });
       
@@ -395,7 +434,7 @@ const CreateExpensePage = () => {
           </CardContent>
         </Card>
         
-        {selectedGroup && selectedGroup.members && (
+        {selectedGroup && selectedGroup.memberships && (
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -425,7 +464,7 @@ const CreateExpensePage = () => {
               
               {splitMethod === 'equal' ? (
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  Each person pays {selectedGroup.currency} {((amount || 0) / selectedGroup.members.length).toFixed(2)}
+                  Each person pays {selectedGroup.currency} {((amount || 0) / selectedGroup.memberships.length).toFixed(2)}
                 </Typography>
               ) : (
                 <Box sx={{ mb: 1 }}>

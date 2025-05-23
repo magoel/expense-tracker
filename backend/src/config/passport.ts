@@ -123,7 +123,7 @@ export const configurePassport = (app: Express): void => {
               }
             }
 
-            return done(null, user);
+            return done(null, user || false);
           } catch (err) {
             logger.error('Error during Google authentication:', err);
             return done(err, false);

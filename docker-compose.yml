@@ -8,6 +8,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+      - "9229:9229"
     depends_on:
       - postgres
       - redis
@@ -30,6 +31,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5173:5173"
+    environment:
+      - VITE_API_URL=/api
     volumes:
       - ./frontend:/app
       - /app/node_modules

@@ -10,4 +10,5 @@ COPY . .
 
 EXPOSE 5173
 
-CMD ["npm", "run", "dev"]
+# Use explicit host flag to ensure the server binds to 0.0.0.0
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

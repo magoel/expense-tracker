@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Op, Sequelize, fn, col, literal } from 'sequelize';
+import { Op, Sequelize, fn, col, literal, ProjectionAlias } from 'sequelize';
 import { Expense, ExpenseShare, Payment, User } from '../models';
 import { asyncHandler } from '../middleware/errorHandler';
 
@@ -39,14 +39,21 @@ export const statsController = {
     }
     
     // Get expenses grouped by time period
+    const expenseAttributes: any[] = [
+      [fn('to_char', col('date'), dateFormat), 'period'],
+      [fn('date_part', 'year', col('date')), 'year']
+    ];
+    
+    if (timeFrame === 'monthly') {
+      expenseAttributes.push([fn('date_part', 'month', col('date')), 'month']);
+    } else if (timeFrame === 'weekly') {
+      expenseAttributes.push([fn('date_part', 'week', col('date')), 'week']);
+    }
+    
+    expenseAttributes.push([fn('sum', col('amount')), 'total']);
+    
     const expenses = await Expense.findAll({
-      attributes: [
-        [fn('to_char', col('date'), dateFormat), 'period'],
-        [fn('date_part', 'year', col('date')), 'year'],
-        ...(timeFrame === 'monthly' ? [[fn('date_part', 'month', col('date')), 'month']] : []),
-        ...(timeFrame === 'weekly' ? [[fn('date_part', 'week', col('date')), 'week']] : []),
-        [fn('sum', col('amount')), 'total'],
-      ],
+      attributes: expenseAttributes,
       where: { groupId },
       group,
       order: order.map(field => [field, 'ASC']),
@@ -164,19 +171,19 @@ export const statsController = {
       
       // Amounts paid for expenses
       const paid = paidExpenses.find(expense => expense.paidById === userId);
-      const paidAmount = parseFloat(paid?.paidAmount || 0);
+      const paidAmount = parseFloat((paid as any)?.paidAmount || 0);
       
       // Amounts owed for expenses
       const owed = owedShares.find(share => share.userId === userId);
-      const owedAmount = parseFloat(owed?.owedAmount || 0);
+      const owedAmount = parseFloat((owed as any)?.owedAmount || 0);
       
       // Payments sent
       const sent = paymentsSent.find(payment => payment.payerId === userId);
-      const sentAmount = parseFloat(sent?.sentAmount || 0);
+      const sentAmount = parseFloat((sent as any)?.sentAmount || 0);
       
       // Payments received
       const received = paymentsReceived.find(payment => payment.receiverId === userId);
-      const receivedAmount = parseFloat(received?.receivedAmount || 0);
+      const receivedAmount = parseFloat((received as any)?.receivedAmount || 0);
       
       // Calculate balance: (paid + received) - (owed + sent)
       const balance = (paidAmount + receivedAmount) - (owedAmount + sentAmount);
@@ -347,19 +354,19 @@ async function getBalances(groupId: string | number) {
     
     // Amounts paid for expenses
     const paid = paidExpenses.find(expense => expense.paidById === userId);
-    const paidAmount = parseFloat(paid?.paidAmount || 0);
+    const paidAmount = parseFloat((paid as any)?.paidAmount || 0);
     
     // Amounts owed for expenses
     const owed = owedShares.find(share => share.userId === userId);
-    const owedAmount = parseFloat(owed?.owedAmount || 0);
+    const owedAmount = parseFloat((owed as any)?.owedAmount || 0);
     
     // Payments sent
     const sent = paymentsSent.find(payment => payment.payerId === userId);
-    const sentAmount = parseFloat(sent?.sentAmount || 0);
+    const sentAmount = parseFloat((sent as any)?.sentAmount || 0);
     
     // Payments received
     const received = paymentsReceived.find(payment => payment.receiverId === userId);
-    const receivedAmount = parseFloat(received?.receivedAmount || 0);
+    const receivedAmount = parseFloat((received as any)?.receivedAmount || 0);
     
     // Calculate balance: (paid + received) - (owed + sent)
     const balance = (paidAmount + receivedAmount) - (owedAmount + sentAmount);

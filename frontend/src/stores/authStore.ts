@@ -14,9 +14,10 @@ interface AuthState {
   handleOAuthCallback: (token: string) => Promise<void>;
   logout: () => void;
   updateProfile: (firstName: string, lastName: string) => Promise<void>;
+  updateUserData: (userData: Partial<User>) => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   user: null,
   isInitialized: false,
@@ -136,5 +137,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       throw new Error('Profile update failed');
     }
+  },
+  
+  // Update user data in state
+  updateUserData: (userData) => {
+    set((state) => ({
+      user: state.user ? { ...state.user, ...userData } : null
+    }));
   },
 }));

@@ -5,10 +5,20 @@ import { asyncHandler } from '../middleware/errorHandler';
 import { logger } from '../config/logger';
 import { sequelize } from '../config/database';
 
+// Helper function to check authentication and return user ID
+const getUserId = (req: Request): number => {
+  if (!req.user) {
+    const error: any = new Error('Unauthorized');
+    error.status = 401;
+    throw error;
+  }
+  return (req.user as any).id;
+};
+
 export const expenseController = {
   // Create a new expense
   createExpense: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user.id;
+    const userId = getUserId(req);
     const { groupId, amount, description, date, shares } = req.body;
     
     // Start a transaction
@@ -27,10 +37,14 @@ export const expenseController = {
         { transaction: t }
       );
 
-      // Validate shares sum equals expense amount
+      // Validate shares are provided and sum equals expense amount
+      if (!shares || Object.keys(shares).length === 0) {
+        throw new Error('No shares provided. Please specify how the expense is split.');
+      }
+      
       const sharesTotal = Object.values(shares).reduce((sum: number, share: any) => sum + parseFloat(share), 0);
       if (Math.abs(sharesTotal - parseFloat(amount)) > 0.01) {
-        throw new Error('The sum of shares must equal the expense amount');
+        throw new Error(`The sum of shares (${sharesTotal}) must equal the expense amount (${amount})`);
       }
       
       // Create expense shares
@@ -68,7 +82,7 @@ export const expenseController = {
   // Upload receipt for expense
   uploadReceipt: asyncHandler(async (req: Request, res: Response) => {
     const { expenseId } = req.params;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     if (!req.file) {
       const error: any = new Error('No file uploaded');
@@ -200,7 +214,7 @@ export const expenseController = {
   // Update an expense
   updateExpense: asyncHandler(async (req: Request, res: Response) => {
     const { expenseId } = req.params;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     const { description, date } = req.body;
     
     // Find expense
@@ -236,7 +250,7 @@ export const expenseController = {
   // Delete an expense
   deleteExpense: asyncHandler(async (req: Request, res: Response) => {
     const { expenseId } = req.params;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Find expense
     const expense = await Expense.findByPk(expenseId);

@@ -121,7 +121,7 @@ const ExpensesPage = () => {
   };
 
   // Handle page change
-  const handleChangePage = (event: unknown, newPage: number) => {
+  const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
 
@@ -241,7 +241,9 @@ const ExpensesPage = () => {
                             size="small"
                             onClick={(e) => {
                               e.preventDefault();
-                              window.open(expense.receiptUrl, '_blank');
+                              if (expense.receiptUrl) {
+                                window.open(expense.receiptUrl || '', '_blank');
+                              }
                             }}
                           >
                             <ReceiptIcon fontSize="small" />

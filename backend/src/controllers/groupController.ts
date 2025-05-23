@@ -4,11 +4,21 @@ import { Group, User, GroupMember } from '../models';
 import { asyncHandler } from '../middleware/errorHandler';
 import { logger } from '../config/logger';
 
+// Helper function to check authentication and return user ID
+const getUserId = (req: Request): number => {
+  if (!req.user) {
+    const error: any = new Error('Unauthorized');
+    error.status = 401;
+    throw error;
+  }
+  return (req.user as any).id;
+};
+
 export const groupController = {
   // Create a new group
   createGroup: asyncHandler(async (req: Request, res: Response) => {
     const { name, description, currency = 'USD' } = req.body;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Create the group
     const group = await Group.create({
@@ -38,7 +48,7 @@ export const groupController = {
   
   // Get all groups for the current user
   getUserGroups: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Get all active memberships
     const memberships = await GroupMember.findAll({
@@ -54,7 +64,7 @@ export const groupController = {
       ],
     });
     
-    const groups = memberships.map((membership) => membership.group);
+    const groups = memberships.map((membership) => (membership as any).group);
     
     res.status(200).json({
       success: true,
@@ -66,7 +76,7 @@ export const groupController = {
   
   // Get pending group join requests for groups created by user
   getPendingRequests: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Find groups created by this user
     const userGroups = await Group.findAll({
@@ -148,7 +158,7 @@ export const groupController = {
   // Join a group with code
   joinGroup: asyncHandler(async (req: Request, res: Response) => {
     const { code } = req.body;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Find group by code
     const group = await Group.findOne({
@@ -212,7 +222,7 @@ export const groupController = {
   processJoinRequest: asyncHandler(async (req: Request, res: Response) => {
     const { membershipId } = req.params;
     const { action } = req.body; // 'approve' or 'reject'
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Find the membership
     const membership = await GroupMember.findByPk(membershipId, {
@@ -231,7 +241,7 @@ export const groupController = {
     }
     
     // Check if the current user is the group creator
-    if (membership.group.creatorId !== userId) {
+    if ((membership as any).group.creatorId !== userId) {
       const error: any = new Error('Not authorized to process this request');
       error.status = 403;
       throw error;
@@ -270,7 +280,7 @@ export const groupController = {
   updateGroup: asyncHandler(async (req: Request, res: Response) => {
     const { groupId } = req.params;
     const { name, description } = req.body;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Find the group
     const group = await Group.findByPk(groupId);
@@ -305,7 +315,7 @@ export const groupController = {
   // Remove member from group
   removeMember: asyncHandler(async (req: Request, res: Response) => {
     const { groupId, memberId } = req.params;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Find the group
     const group = await Group.findByPk(groupId);
@@ -355,7 +365,7 @@ export const groupController = {
   // Leave a group
   leaveGroup: asyncHandler(async (req: Request, res: Response) => {
     const { groupId } = req.params;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Find the group
     const group = await Group.findByPk(groupId);

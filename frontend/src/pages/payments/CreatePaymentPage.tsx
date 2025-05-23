@@ -16,12 +16,10 @@ import {
   Alert,
   CircularProgress,
   FormHelperText,
-  SelectChangeEvent,
-  Autocomplete
+  SelectChangeEvent
 } from '@mui/material';
 import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../api';
-import { formatCurrency } from '../../utils/formatters';
 
 interface Group {
   id: number;
@@ -138,31 +136,7 @@ const CreatePaymentPage = () => {
     handleGroupSelect(event.target.value as number);
   };
   
-  // Get suggested amount based on balances
-  const getSuggestedAmount = () => {
-    if (!selectedGroup || !selectedReceiverId || balances.length === 0) {
-      return 0;
-    }
-    
-    // Find current user balance
-    const userBalance = balances.find(b => b.userId === user?.id);
-    if (!userBalance || userBalance.balance >= 0) {
-      return 0;
-    }
-    
-    // Find receiver balance
-    const receiverBalance = balances.find(b => b.userId === selectedReceiverId);
-    if (!receiverBalance || receiverBalance.balance <= 0) {
-      return 0;
-    }
-    
-    // Suggest the minimum of what user owes and what receiver is owed
-    const userOwes = Math.abs(userBalance.balance);
-    const receiverIsOwed = receiverBalance.balance;
-    
-    return Math.min(userOwes, receiverIsOwed);
-  };
-  
+
   // Apply suggestion
   const applySuggestion = (suggestion: PaymentSuggestion) => {
     if (suggestion.from.userId === user?.id) {
@@ -352,7 +326,7 @@ const CreatePaymentPage = () => {
                       >
                         <Box>
                           <Typography variant="body2">
-                            Suggestion: Pay {formatCurrency(suggestion.amount, selectedGroup.currency)} to {suggestion.to.name}
+                            Suggestion: Pay {selectedGroup.currency} {suggestion.amount.toFixed(2)} to {suggestion.to.name}
                           </Typography>
                         </Box>
                         <Button 
@@ -376,7 +350,7 @@ const CreatePaymentPage = () => {
                 <Box sx={{ mt: 2 }}>
                   <Alert severity="success">
                     <Typography variant="body2">
-                      You're about to pay {formatCurrency(amount as number, selectedGroup.currency)} to {
+                      You're about to pay {selectedGroup.currency} {(amount as number).toFixed(2)} to {
                         getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.firstName || ''
                       } {
                         getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.lastName || ''

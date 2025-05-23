@@ -5,10 +5,20 @@ import { logger } from '../config/logger';
 import { sequelize } from '../config/database';
 import { Op } from 'sequelize';
 
+// Helper function to check authentication and return user ID
+const getUserId = (req: Request): number => {
+  if (!req.user) {
+    const error: any = new Error('Unauthorized');
+    error.status = 401;
+    throw error;
+  }
+  return (req.user as any).id;
+};
+
 export const paymentController = {
   // Record a new payment
   createPayment: asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user.id;
+    const userId = getUserId(req);
     const { groupId, receiverId, amount, description, date, expenseShareIds = [] } = req.body;
     
     // Start a transaction
@@ -94,7 +104,7 @@ export const paymentController = {
   // Get payments for a specific user in a group
   getUserPayments: asyncHandler(async (req: Request, res: Response) => {
     const { groupId } = req.params;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Get payments either sent or received by the user
     const payments = await Payment.findAll({
@@ -131,7 +141,7 @@ export const paymentController = {
   // Delete a payment
   deletePayment: asyncHandler(async (req: Request, res: Response) => {
     const { paymentId } = req.params;
-    const userId = req.user.id;
+    const userId = getUserId(req);
     
     // Find payment
     const payment = await Payment.findByPk(paymentId);

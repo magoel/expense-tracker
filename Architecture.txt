@@ -1,7 +1,3 @@
-I'll create a detailed prompt that describes this expense tracker web application, its architecture, features, and components. This prompt could be used to explain the project to others or to guide someone who wants to build a similar application.
-
-# Expense Tracker Web Application - Complete Project Prompt
-
 ## Project Overview
 Create a full-stack web application for tracking group expenses with the following capabilities:
 - Track expenses shared within different groups of people

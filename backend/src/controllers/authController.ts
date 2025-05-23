@@ -91,7 +91,7 @@ export const authController = {
   // Google OAuth callback
   googleCallback: asyncHandler(async (req: Request, res: Response) => {
     // User is already attached to req.user by passport
-    const user = req.user;
+    const user = req.user as any;
     
     if (!user) {
       return res.redirect('/login?error=auth_failed');
@@ -112,7 +112,14 @@ export const authController = {
   
   // Get current user
   getCurrentUser: asyncHandler(async (req: Request, res: Response) => {
-    const user = await User.findByPk(req.user.id);
+    if (!req.user) {
+      const error: any = new Error('Unauthorized');
+      error.status = 401;
+      throw error;
+    }
+    
+    const authUser = req.user as any;
+    const user = await User.findByPk(authUser.id);
     
     if (!user) {
       const error: any = new Error('User not found');
@@ -132,7 +139,14 @@ export const authController = {
   updateProfile: asyncHandler(async (req: Request, res: Response) => {
     const { firstName, lastName } = req.body;
     
-    const user = await User.findByPk(req.user.id);
+    if (!req.user) {
+      const error: any = new Error('Unauthorized');
+      error.status = 401;
+      throw error;
+    }
+    
+    const authUser = req.user as any;
+    const user = await User.findByPk(authUser.id);
     
     if (!user) {
       const error: any = new Error('User not found');
@@ -158,7 +172,14 @@ export const authController = {
   changePassword: asyncHandler(async (req: Request, res: Response) => {
     const { currentPassword, newPassword } = req.body;
     
-    const user = await User.findByPk(req.user.id);
+    if (!req.user) {
+      const error: any = new Error('Unauthorized');
+      error.status = 401;
+      throw error;
+    }
+    
+    const authUser = req.user as any;
+    const user = await User.findByPk(authUser.id);
     
     if (!user || !user.passwordHash) {
       const error: any = new Error('User not found or no password set');

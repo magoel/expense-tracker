@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "nodemon --exec ts-node src/index.ts",
+    "debug": "nodemon --exec node --inspect=0.0.0.0:9229 -r ts-node/register src/index.ts",
     "build": "tsc",
     "test": "jest",
     "lint": "eslint . --ext .ts"
@@ -59,6 +60,7 @@
     "@types/passport-jwt": "^3.0.13",
     "@types/passport-local": "^1.0.38",
     "@types/pg": "^8.10.9",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
     "eslint": "^8.53.0",

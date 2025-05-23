@@ -26,7 +26,6 @@ import {
   FormControlLabel
 } from '@mui/material';
 import {
-  Person as PersonIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Save as SaveIcon,

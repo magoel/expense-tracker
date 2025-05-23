@@ -6,6 +6,9 @@ export interface User {
   avatarUrl?: string;
   createdAt: string;
   updatedAt: string;
+  authProvider?: 'local' | 'google' | string;
+  groupCount?: number;
+  expenseCount?: number;
 }
 
 export interface AuthResponse {
