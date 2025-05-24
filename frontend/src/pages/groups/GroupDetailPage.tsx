@@ -119,6 +119,20 @@ interface ActivityItem {
   data: Expense | Payment;
 }
 
+interface PendingMembership {
+  id: number;
+  userId: number;
+  groupId: number;
+  status: string;
+  user: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+    avatarUrl?: string;
+  };
+}
+
 interface PaginationMeta {
   totalCount: number;
   totalPages: number;
@@ -132,6 +146,10 @@ const GroupDetailPage: React.FC = () => {
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<PendingMembership[]>([]);
+  const [pendingRequestsLoading, setPendingRequestsLoading] = useState(false);
+  const [processingMembershipId, setProcessingMembershipId] = useState<number | null>(null);
+  const [membershipActionFeedback, setMembershipActionFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
   const [allActivityItems, setAllActivityItems] = useState<ActivityItem[]>([]); // For search filtering
   const [recentActivityLoading, setRecentActivityLoading] = useState(false);
@@ -155,6 +173,11 @@ const GroupDetailPage: React.FC = () => {
         const response = await api.get(`/groups/${groupId}`);
         setGroup(response.data.data.group);
         setError(null);
+        
+        // If user is the group creator, fetch pending requests
+        if (response.data.data.group.creatorId === response.data.data.currentUser?.id) {
+          fetchPendingRequests();
+        }
       } catch (err) {
         console.error('Failed to fetch group details:', err);
         setError('Failed to load group details. Please try again later.');
@@ -163,10 +186,28 @@ const GroupDetailPage: React.FC = () => {
       }
     };
 
+    const fetchPendingRequests = async () => {
+      try {
+        setPendingRequestsLoading(true);
+        const response = await api.get('/groups/pending-requests');
+        
+        // Filter requests for the current group
+        const currentGroupRequests = response.data.data.pendingRequests.filter(
+          (request: PendingMembership) => request.groupId === parseInt(groupId || '0')
+        );
+        
+        setPendingRequests(currentGroupRequests);
+      } catch (err) {
+        console.error('Failed to fetch pending requests:', err);
+      } finally {
+        setPendingRequestsLoading(false);
+      }
+    };
+
     if (groupId) {
       fetchGroup();
     }
-  }, [groupId]);
+  }, [groupId, loading]);
 
   useEffect(() => {
     const fetchAllActivity = async () => {
@@ -304,6 +345,68 @@ const GroupDetailPage: React.FC = () => {
   const handleActivityTypeChange = (event: SelectChangeEvent<string>) => {
     setActivityType(event.target.value);
     setPage(1); // Reset to first page when changing filter
+  };
+  
+  // Handle membership request approval
+  const handleApproveRequest = async (membershipId: number) => {
+    try {
+      setProcessingMembershipId(membershipId);
+      await api.patch(`/groups/memberships/${membershipId}`, { action: 'approve' });
+      
+      // Remove from pending requests
+      setPendingRequests(prev => prev.filter(req => req.id !== membershipId));
+      
+      // Refresh group data to show new member
+      const response = await api.get(`/groups/${groupId}`);
+      setGroup(response.data.data.group);
+      
+      setMembershipActionFeedback({ 
+        message: 'Membership request approved successfully', 
+        type: 'success' 
+      });
+      
+      // Clear feedback after 3 seconds
+      setTimeout(() => {
+        setMembershipActionFeedback(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to approve membership request:', err);
+      setMembershipActionFeedback({ 
+        message: 'Failed to approve membership request', 
+        type: 'error' 
+      });
+    } finally {
+      setProcessingMembershipId(null);
+    }
+  };
+  
+  // Handle membership request rejection
+  const handleRejectRequest = async (membershipId: number) => {
+    try {
+      setProcessingMembershipId(membershipId);
+      await api.patch(`/groups/memberships/${membershipId}`, { action: 'reject' });
+      
+      // Remove from pending requests
+      setPendingRequests(prev => prev.filter(req => req.id !== membershipId));
+      
+      setMembershipActionFeedback({ 
+        message: 'Membership request rejected', 
+        type: 'success' 
+      });
+      
+      // Clear feedback after 3 seconds
+      setTimeout(() => {
+        setMembershipActionFeedback(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to reject membership request:', err);
+      setMembershipActionFeedback({ 
+        message: 'Failed to reject membership request', 
+        type: 'error' 
+      });
+    } finally {
+      setProcessingMembershipId(null);
+    }
   };
 
   if (loading) {
@@ -486,6 +589,75 @@ const GroupDetailPage: React.FC = () => {
               
               <Divider sx={{ my: 1 }} />
               
+              {/* Membership action feedback */}
+              {membershipActionFeedback && (
+                <Alert 
+                  severity={membershipActionFeedback.type} 
+                  sx={{ mb: 2 }}
+                >
+                  {membershipActionFeedback.message}
+                </Alert>
+              )}
+              
+              {/* Pending Membership Requests */}
+              {pendingRequestsLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <CircularProgress size={20} />
+                </Box>
+              ) : pendingRequests.length > 0 && (
+                <>
+                  <Box sx={{ mb: 2, mt: 1 }}>
+                    <Typography variant="subtitle2" color="primary" gutterBottom>
+                      Pending Requests
+                    </Typography>
+                    <List>
+                      {pendingRequests.map((request) => (
+                        <ListItem 
+                          key={`pending-${request.id}`}
+                          secondaryAction={
+                            <Box>
+                              <Button 
+                                size="small" 
+                                color="primary"
+                                onClick={() => handleApproveRequest(request.id)}
+                                sx={{ mr: 1 }}
+                                disabled={processingMembershipId === request.id}
+                              >
+                                Approve
+                              </Button>
+                              <Button 
+                                size="small"
+                                color="error"
+                                onClick={() => handleRejectRequest(request.id)}
+                                disabled={processingMembershipId === request.id}
+                              >
+                                Reject
+                              </Button>
+                            </Box>
+                          }
+                        >
+                          <ListItemAvatar>
+                            <Avatar sx={{ bgcolor: 'warning.light' }}>
+                              <Person />
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText 
+                            primary={`${request.user.firstName} ${request.user.lastName}`}
+                            secondary={request.user.email}
+                            primaryTypographyProps={{ variant: 'body2' }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                    <Divider sx={{ my: 1 }} />
+                  </Box>
+                </>
+              )}
+              
+              {/* Active Members List */}
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                {pendingRequests.length > 0 ? 'Active Members' : ''}
+              </Typography>
               <List>
                 {group?.memberships && group.memberships.length > 0 ? (
                   group.memberships.map((membership) => (

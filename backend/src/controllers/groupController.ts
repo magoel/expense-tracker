@@ -138,6 +138,7 @@ export const groupController = {
   // Get single group details
   getGroupDetails: asyncHandler(async (req: Request, res: Response) => {
     const { groupId } = req.params;
+    const userId = getUserId(req);
     
     // Find group with members
     const group = await Group.findByPk(groupId, {
@@ -169,6 +170,9 @@ export const groupController = {
       success: true,
       data: {
         group,
+        currentUser: {
+          id: userId
+        }
       },
     });
   }),
