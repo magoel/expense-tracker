@@ -46,7 +46,7 @@ interface Group {
   id: number;
   name: string;
   currency: string;
-  membersCount?: number;
+  memberCount?: number;
 }
 
 interface Expense {
@@ -368,7 +368,7 @@ const DashboardPage = () => {
                       </Avatar>
                       <ListItemText 
                         primary={group.name} 
-                        secondary={`${group.membersCount || 0} members`} 
+                        secondary={`${group.memberCount || 0} members`} 
                       />
                       <ListItemSecondaryAction>
                         <ArrowForwardIcon color="action" />
