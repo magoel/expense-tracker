@@ -86,7 +86,17 @@ const GroupsPage = () => {
       setJoinError(null);
       
       const response = await api.post('/groups/join', { code: groupCode.trim() });
-      setJoinSuccess(`Join request sent for group: ${response.data.data.group.name}`);
+      const { data } = response.data;
+      
+      // Check the status field to determine what message to show
+      if (data.status === 'already_member') {
+        setJoinSuccess(`You are already a member of group: ${data.group.name}`);
+      } else if (data.status === 'pending') {
+        setJoinError(`Your request to join group ${data.group.name} is pending approval`);
+      } else {
+        setJoinSuccess(`Join request sent for group: ${data.group.name}`);
+      }
+      
       setGroupCode('');
       
     } catch (err: any) {

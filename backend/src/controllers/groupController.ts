@@ -178,6 +178,13 @@ export const groupController = {
     const { code } = req.body;
     const userId = getUserId(req);
     
+    console.log('Join group request:', { 
+      code, 
+      userId, 
+      body: req.body, 
+      headers: req.headers 
+    });
+    
     // Find group by code
     const group = await Group.findOne({
       where: { code },
@@ -199,15 +206,33 @@ export const groupController = {
     
     if (existingMembership) {
       if (existingMembership.status === 'active') {
-        const error: any = new Error('You are already a member of this group');
-        error.status = 400;
-        throw error;
+        // Return success with message instead of error
+        return res.status(200).json({
+          success: true,
+          data: {
+            message: 'You are already a member of this group',
+            status: 'already_member',
+            group: {
+              id: group.id,
+              name: group.name,
+            },
+          },
+        });
       }
       
       if (existingMembership.status === 'pending') {
-        const error: any = new Error('Your request to join this group is pending');
-        error.status = 400;
-        throw error;
+        // Return success with pending status instead of error
+        return res.status(200).json({
+          success: true,
+          data: {
+            message: 'Your request to join this group is pending approval',
+            status: 'pending',
+            group: {
+              id: group.id,
+              name: group.name,
+            },
+          },
+        });
       }
       
       // If rejected before, update the status to pending
