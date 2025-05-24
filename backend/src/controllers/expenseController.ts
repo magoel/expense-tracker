@@ -37,14 +37,10 @@ export const expenseController = {
         { transaction: t }
       );
 
-      // Validate shares are provided and sum equals expense amount
-      if (!shares || Object.keys(shares).length === 0) {
-        throw new Error('No shares provided. Please specify how the expense is split.');
-      }
-      
+      // Validate shares sum equals expense amount
       const sharesTotal = Object.values(shares).reduce((sum: number, share: any) => sum + parseFloat(share), 0);
       if (Math.abs(sharesTotal - parseFloat(amount)) > 0.01) {
-        throw new Error(`The sum of shares (${sharesTotal}) must equal the expense amount (${amount})`);
+        throw new Error('The sum of shares must equal the expense amount');
       }
       
       // Create expense shares
