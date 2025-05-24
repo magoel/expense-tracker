@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Payment, User, ExpenseShare } from '../models';
+import { Payment, User, ExpenseShare, Group } from '../models';
 import { asyncHandler } from '../middleware/errorHandler';
 import { logger } from '../config/logger';
 import { sequelize } from '../config/database';
@@ -167,6 +167,64 @@ export const paymentController = {
     res.status(200).json({
       success: true,
       message: 'Payment deleted successfully',
+    });
+  }),
+  
+  // Get recent payments for the current user across all groups
+  getRecentUserPayments: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) || 1;
+    const search = req.query.search as string || '';
+    const offset = (page - 1) * limit;
+    
+    // Prepare search condition for description if search term exists
+    const searchCondition = search 
+      ? { description: { [Op.iLike]: `%${search}%` } } 
+      : {};
+    
+    // Find payments where user is either the payer or the receiver
+    const payments = await Payment.findAndCountAll({
+      where: {
+        ...searchCondition,
+        [Op.or]: [
+          { payerId: userId },
+          { receiverId: userId }
+        ]
+      },
+      include: [
+        {
+          model: User,
+          as: 'payer',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+        },
+        {
+          model: User,
+          as: 'receiver',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+        },
+        {
+          model: Group,
+          as: 'group',
+          attributes: ['id', 'name', 'currency'],
+        },
+      ],
+      order: [['date', 'DESC']],
+      limit,
+      offset,
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        payments: payments.rows,
+        pagination: {
+          totalCount: payments.count,
+          totalPages: Math.ceil(payments.count / limit),
+          currentPage: page,
+          limit,
+        },
+      },
     });
   }),
 };

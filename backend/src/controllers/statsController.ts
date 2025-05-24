@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { Op, Sequelize, fn, col, literal, ProjectionAlias } from 'sequelize';
-import { Expense, ExpenseShare, Payment, User } from '../models';
+import { Expense, ExpenseShare, Payment, User, Group, GroupMember } from '../models';
 import { asyncHandler } from '../middleware/errorHandler';
 
 export const statsController = {
@@ -221,12 +221,12 @@ export const statsController = {
     const creditors = balances
       .filter(b => b.balance > 0)
       .sort((a, b) => b.balance - a.balance);
-    
+      
     const debtors = balances
       .filter(b => b.balance < 0)
       .sort((a, b) => a.balance - b.balance); // Sort by most negative first
     
-    const paymentSuggestions = [];
+    const paymentSuggestions: any[] = [];
     
     // Simplify debts
     let i = 0, j = 0;
@@ -269,6 +269,139 @@ export const statsController = {
       data: {
         paymentSuggestions,
       },
+    });
+  }),
+  
+  // Get user balances across all groups
+  getUserBalances: asyncHandler(async (req: Request, res: Response) => {
+    // Get the current user ID from the request
+    const userId = (req.user as any)?.id;
+    
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    // Get all groups that the user is a member of
+    const memberGroups = await GroupMember.findAll({
+      where: {
+        userId,
+        status: 'active'
+      },
+      attributes: ['groupId'],
+      raw: true
+    });
+    
+    const groupIds = memberGroups.map((member: any) => member.groupId);
+    
+    if (groupIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          balances: []
+        }
+      });
+    }
+    
+    // For each group, calculate the user's balance
+    const balancePromises = groupIds.map(async (groupId: number) => {
+      try {
+        // Get group info
+        const group = await Group.findByPk(groupId, {
+          attributes: ['id', 'name', 'currency'],
+          raw: true
+        });
+        
+        if (!group) {
+          return null;
+        }
+        
+        // Calculate what user has paid (positive)
+        const paidExpenses = await Expense.findOne({
+          attributes: [
+            [fn('COALESCE', fn('sum', col('amount')), 0), 'paidAmount']
+          ],
+          where: { 
+            groupId,
+            paidById: userId
+          },
+          raw: true
+        });
+        
+        // Calculate what user owes (negative)
+        const owedShares = await ExpenseShare.findOne({
+          attributes: [
+            [fn('COALESCE', fn('sum', col('amount')), 0), 'owedAmount']
+          ],
+          where: {
+            userId
+          },
+          include: [
+            {
+              model: Expense,
+              as: 'expense',
+              attributes: [],
+              where: { groupId }
+            }
+          ],
+          raw: true
+        });
+        
+        // Calculate payments sent by user (negative)
+        const paymentsSent = await Payment.findOne({
+          attributes: [
+            [fn('COALESCE', fn('sum', col('amount')), 0), 'sentAmount']
+          ],
+          where: {
+            groupId,
+            payerId: userId
+          },
+          raw: true
+        });
+        
+        // Calculate payments received by user (positive)
+        const paymentsReceived = await Payment.findOne({
+          attributes: [
+            [fn('COALESCE', fn('sum', col('amount')), 0), 'receivedAmount']
+          ],
+          where: {
+            groupId,
+            receiverId: userId
+          },
+          raw: true
+        });
+        
+        // Calculate balance: (paid + received) - (owed + sent)
+        const paidAmount = parseFloat((paidExpenses as any)?.paidAmount || 0);
+        const owedAmount = parseFloat((owedShares as any)?.owedAmount || 0);
+        const sentAmount = parseFloat((paymentsSent as any)?.sentAmount || 0);
+        const receivedAmount = parseFloat((paymentsReceived as any)?.receivedAmount || 0);
+        
+        const balance = (paidAmount + receivedAmount) - (owedAmount + sentAmount);
+        
+        return {
+          groupId: group.id,
+          groupName: group.name,
+          balance: parseFloat(balance.toFixed(2)), // Round to 2 decimal places
+          currency: group.currency
+        };
+      } catch (error) {
+        console.error(`Error calculating balance for group ${groupId}:`, error);
+        return null;
+      }
+    });
+    
+    // Remove any null results
+    const balances = (await Promise.all(balancePromises))
+      .filter(balance => balance !== null);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        balances
+      }
     });
   }),
 };

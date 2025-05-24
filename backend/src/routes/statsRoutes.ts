@@ -17,3 +17,6 @@ statsRouter.get('/group/:groupId/balances', isGroupMember, statsController.getGr
 
 // Get payment suggestions to settle debts
 statsRouter.get('/group/:groupId/payment-suggestions', isGroupMember, statsController.getPaymentSuggestions);
+
+// Get balances for current user across all groups
+statsRouter.get('/user-balances', statsController.getUserBalances);

@@ -72,6 +72,9 @@ expenseRouter.post('/:expenseId/receipt', upload.single('receipt'), expenseContr
 // Get expenses for a group
 expenseRouter.get('/group/:groupId', isGroupMember, expenseController.getGroupExpenses);
 
+// Get recent expenses for user across all groups
+expenseRouter.get('/recent', expenseController.getRecentUserExpenses);
+
 // Get expense details
 expenseRouter.get('/:expenseId', expenseController.getExpenseDetails);
 

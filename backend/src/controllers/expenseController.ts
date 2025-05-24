@@ -316,4 +316,80 @@ export const expenseController = {
       },
     });
   }),
+
+  // Get recent expenses for the current user across all groups
+  getRecentUserExpenses: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) || 1;
+    const search = req.query.search as string || '';
+    const offset = (page - 1) * limit;
+    
+    // Prepare search condition for description if search term exists
+    const searchCondition = search 
+      ? { description: { [Op.iLike]: `%${search}%` } } 
+      : {};
+    
+    // First, get all expense IDs where the user has a share
+    const userShareExpenseIds = await ExpenseShare.findAll({
+      where: {
+        userId
+      },
+      attributes: ['expenseId'],
+      raw: true
+    }).then(shares => shares.map(share => share.expenseId));
+    
+    // Find expenses: 
+    // 1. Where user is the payer OR
+    // 2. Where expense ID is in the list of expenses where user has a share
+    const expenses = await Expense.findAndCountAll({
+      where: {
+        ...searchCondition,
+        [Op.or]: [
+          { paidById: userId },
+          { id: { [Op.in]: userShareExpenseIds } }
+        ]
+      },
+      include: [
+        {
+          model: User,
+          as: 'paidBy',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+        },
+        {
+          model: Group,
+          as: 'group',
+          attributes: ['id', 'name', 'currency'],
+        },
+        {
+          model: ExpenseShare,
+          as: 'shares',
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+            },
+          ],
+        },
+      ],
+      order: [['date', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        expenses: expenses.rows,
+        pagination: {
+          totalCount: expenses.count,
+          totalPages: Math.ceil(expenses.count / limit),
+          currentPage: page,
+          limit,
+        },
+      },
+    });
+  }),
 };

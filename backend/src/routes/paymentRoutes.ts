@@ -29,5 +29,8 @@ paymentRouter.get('/group/:groupId', isGroupMember, paymentController.getGroupPa
 // Get payments for current user in a group
 paymentRouter.get('/group/:groupId/user', isGroupMember, paymentController.getUserPayments);
 
+// Get recent payments for user across all groups
+paymentRouter.get('/recent', paymentController.getRecentUserPayments);
+
 // Delete a payment
 paymentRouter.delete('/:paymentId', paymentController.deletePayment);
