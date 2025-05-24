@@ -52,8 +52,8 @@ const GroupDetailPage: React.FC = () => {
     const fetchGroup = async () => {
       try {
         setLoading(true);
-        const response = await api.get(`/api/groups/${groupId}`);
-        setGroup(response.data);
+        const response = await api.get(`/groups/${groupId}`);
+        setGroup(response.data.data.group);
         setError(null);
       } catch (err) {
         console.error('Failed to fetch group details:', err);
