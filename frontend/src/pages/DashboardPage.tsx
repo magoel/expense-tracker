@@ -260,10 +260,10 @@ const DashboardPage = () => {
         // Search in group name
         if (item.type === 'expense') {
           const expense = item.data as Expense;
-          if (expense.group.name.toLowerCase().includes(searchLower)) return true;
+          if (expense.group && expense.group.name && expense.group.name.toLowerCase().includes(searchLower)) return true;
         } else {
           const payment = item.data as Payment;
-          if (payment.group.name.toLowerCase().includes(searchLower)) return true;
+          if (payment.group && payment.group.name && payment.group.name.toLowerCase().includes(searchLower)) return true;
         }
         
         return false;
@@ -528,12 +528,14 @@ const DashboardPage = () => {
                                 primary={
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                     <Typography variant="body1">{expense.description}</Typography>
-                                    <Chip 
-                                      label={expense.group.name} 
-                                      size="small" 
-                                      variant="outlined" 
-                                      sx={{ ml: 1 }}
-                                    />
+                                    {expense.group && (
+                                      <Chip 
+                                        label={expense.group.name} 
+                                        size="small" 
+                                        variant="outlined" 
+                                        sx={{ ml: 1 }}
+                                      />
+                                    )}
                                   </Box>
                                 }
                                 secondaryTypographyProps={{ component: 'div' }}
@@ -552,7 +554,7 @@ const DashboardPage = () => {
                                 variant="body1"
                                 fontWeight="bold"
                               >
-                                {formatCurrency(parseFloat(expense.amount.toString()), expense.group.currency)}
+                                {formatCurrency(parseFloat(expense.amount.toString()), expense.group?.currency || 'USD')}
                               </Typography>
                             </ListItem>
                           );

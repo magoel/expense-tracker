@@ -226,16 +226,20 @@ const ExpensesPage = () => {
                     >
                       <TableCell>{expense.description}</TableCell>
                       <TableCell>
-                        <Chip
-                          label={expense.group.name}
-                          size="small"
-                          component={RouterLink}
-                          to={`/groups/${expense.group.id}`}
-                          clickable
-                          onClick={(e) => e.stopPropagation()}
-                        />
+                        {expense.group ? (
+                          <Chip
+                            label={expense.group.name}
+                            size="small"
+                            component={RouterLink}
+                            to={`/groups/${expense.group.id}`}
+                            clickable
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">No group</Typography>
+                        )}
                       </TableCell>
-                      <TableCell>{formatCurrency(expense.amount, expense.group.currency)}</TableCell>
+                      <TableCell>{formatCurrency(expense.amount, expense.group?.currency || 'USD')}</TableCell>
                       <TableCell>
                         {expense.paidBy.id === user?.id
                           ? 'You'
