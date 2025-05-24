@@ -536,6 +536,7 @@ const DashboardPage = () => {
                                     />
                                   </Box>
                                 }
+                                secondaryTypographyProps={{ component: 'div' }}
                                 secondary={
                                   <>
                                     <Typography variant="body2" component="span">
@@ -577,6 +578,7 @@ const DashboardPage = () => {
                                     />
                                   </Box>
                                 }
+                                secondaryTypographyProps={{ component: 'div' }}
                                 secondary={
                                   <>
                                     <Typography variant="body2" component="span">
