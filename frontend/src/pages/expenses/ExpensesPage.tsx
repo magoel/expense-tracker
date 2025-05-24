@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -59,6 +59,7 @@ interface Group {
 
 const ExpensesPage = () => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -212,12 +213,17 @@ const ExpensesPage = () => {
                 </TableHead>
                 <TableBody>
                   {expenses.map((expense) => (
-                    <TableRow key={expense.id} hover component={RouterLink} to={`/expenses/${expense.id}`} sx={{
-                      textDecoration: 'none',
-                      '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                      },
-                    }}>
+                    <TableRow 
+                      key={expense.id} 
+                      hover
+                      onClick={() => navigate(`/expenses/${expense.id}`)}
+                      sx={{
+                        cursor: 'pointer',
+                        '&:hover': {
+                          backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                        },
+                      }}
+                    >
                       <TableCell>{expense.description}</TableCell>
                       <TableCell>
                         <Chip
@@ -226,6 +232,7 @@ const ExpensesPage = () => {
                           component={RouterLink}
                           to={`/groups/${expense.group.id}`}
                           clickable
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </TableCell>
                       <TableCell>{formatCurrency(expense.amount, expense.group.currency)}</TableCell>
@@ -240,7 +247,7 @@ const ExpensesPage = () => {
                           <IconButton
                             size="small"
                             onClick={(e) => {
-                              e.preventDefault();
+                              e.stopPropagation();
                               if (expense.receiptUrl) {
                                 window.open(expense.receiptUrl || '', '_blank');
                               }
@@ -251,7 +258,10 @@ const ExpensesPage = () => {
                         )}
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton size="small">
+                        <IconButton 
+                          size="small"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreVertIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
