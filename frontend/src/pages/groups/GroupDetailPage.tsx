@@ -27,18 +27,25 @@ interface Group {
   description: string;
   code: string;
   creatorId: number;
+  currency: string;
   createdAt: string;
   updatedAt: string;
-  members: Member[];
+  memberships?: Membership[];
 }
 
-interface Member {
+interface Membership {
   id: number;
   userId: number;
   groupId: number;
-  name: string;
-  email: string;
+  status: string;
   joinedAt: string;
+  user: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+    avatarUrl?: string;
+  };
 }
 
 const GroupDetailPage: React.FC = () => {
@@ -156,7 +163,7 @@ const GroupDetailPage: React.FC = () => {
           />
           <Chip 
             icon={<PeopleAlt />} 
-            label={`${group.members?.length || 0} Members`} 
+            label={`${group.memberships?.length || 0} Members`} 
             variant="outlined" 
           />
         </Box>
@@ -173,12 +180,12 @@ const GroupDetailPage: React.FC = () => {
               <Divider sx={{ my: 1 }} />
               
               <List>
-                {group.members && group.members.length > 0 ? (
-                  group.members.map((member) => (
-                    <ListItem key={member.id}>
+                {group.memberships && group.memberships.length > 0 ? (
+                  group.memberships.map((membership) => (
+                    <ListItem key={membership.id}>
                       <ListItemText 
-                        primary={member.name} 
-                        secondary={member.email} 
+                        primary={`${membership.user.firstName} ${membership.user.lastName}`} 
+                        secondary={membership.user.email} 
                       />
                     </ListItem>
                   ))

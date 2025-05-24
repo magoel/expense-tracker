@@ -34,7 +34,7 @@ interface Group {
   code: string;
   currency: string;
   createdAt: string;
-  memberCount?: number;
+  memberCount: number;
 }
 
 const GroupsPage = () => {

@@ -64,7 +64,25 @@ export const groupController = {
       ],
     });
     
-    const groups = memberships.map((membership) => (membership as any).group);
+    // Get groups with member count
+    const rawGroups = memberships.map((membership) => (membership as any).group);
+    
+    // Get member count for each group
+    const groupPromises = rawGroups.map(async (group) => {
+      const memberCount = await GroupMember.count({
+        where: {
+          groupId: group.id,
+          status: 'active'
+        }
+      });
+      
+      return {
+        ...group.toJSON(),
+        memberCount
+      };
+    });
+    
+    const groups = await Promise.all(groupPromises);
     
     res.status(200).json({
       success: true,
