@@ -81,18 +81,6 @@ interface Balance {
   balance: number;
 }
 
-interface Payment {
-  from: {
-    userId: number;
-    name: string;
-  };
-  to: {
-    userId: number;
-    name: string;
-  };
-  amount: number;
-}
-
 const StatisticsPage = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
@@ -101,7 +89,6 @@ const StatisticsPage = () => {
   const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesData[]>([]);
   const [byPayerData, setByPayerData] = useState<PayerData[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
-  const [paymentSuggestions, setPaymentSuggestions] = useState<Payment[]>([]);
   const [loading, setLoading] = useState({
     groups: true,
     stats: false,
@@ -150,10 +137,6 @@ const StatisticsPage = () => {
         // Fetch balances
         const balancesResponse = await api.get(`/stats/group/${selectedGroup}/balances`);
         setBalances(balancesResponse.data.data.balances);
-        
-        // Fetch payment suggestions
-        const suggestionsResponse = await api.get(`/stats/group/${selectedGroup}/payment-suggestions`);
-        setPaymentSuggestions(suggestionsResponse.data.data.suggestions);
         
         setLoading(prev => ({ ...prev, stats: false }));
       } catch (error) {
@@ -392,7 +375,6 @@ const StatisticsPage = () => {
           <Tab label="Expenses Over Time" />
           <Tab label="Expenses By Payer" />
           <Tab label="Balances" />
-          <Tab label="Payment Suggestions" />
         </Tabs>
       </Box>
       
@@ -536,68 +518,6 @@ const StatisticsPage = () => {
                     ))}
                   </Grid>
                 </Box>
-              </CardContent>
-            </Card>
-          )}
-          
-          {/* Payment Suggestions Tab */}
-          {activeTab === 3 && (
-            <Card>
-              <CardHeader title="Suggested Payments" />
-              <Divider />
-              <CardContent>
-                {paymentSuggestions.length > 0 ? (
-                  <Grid container spacing={2}>
-                    {paymentSuggestions.map((suggestion, index) => (
-                      <Grid item xs={12} sm={6} md={4} key={index}>
-                        <Card variant="outlined">
-                          <CardContent>
-                            <Typography variant="body2" color="text.secondary">
-                              From
-                            </Typography>
-                            <Typography variant="subtitle2" gutterBottom>
-                              {suggestion.from.name}
-                            </Typography>
-                            
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                              To
-                            </Typography>
-                            <Typography variant="subtitle2" gutterBottom>
-                              {suggestion.to.name}
-                            </Typography>
-                            
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                              Amount
-                            </Typography>
-                            <Typography variant="h6" color="primary.main">
-                              {formatCurrency(suggestion.amount, getSelectedGroupCurrency())}
-                            </Typography>
-                            
-                            <Button
-                              component={RouterLink}
-                              to={`/payments/new?groupId=${selectedGroup}`}
-                              variant="text"
-                              size="small"
-                              sx={{ mt: 1 }}
-                              fullWidth
-                            >
-                              Record this payment
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                    ))}
-                  </Grid>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 3 }}>
-                    <Typography variant="body1" color="text.secondary">
-                      No payment suggestions available at this time.
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                      This usually means that your group is settled up, or that the system couldn't find any efficient payment routes.
-                    </Typography>
-                  </Box>
-                )}
               </CardContent>
             </Card>
           )}
