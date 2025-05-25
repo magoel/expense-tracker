@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { Op } from 'sequelize';
-import { Expense, ExpenseShare, User, Group } from '../models';
+import { Expense, ExpenseShare, User, Group, GroupMember } from '../models';
 import { asyncHandler } from '../middleware/errorHandler';
 import { logger } from '../config/logger';
 import { sequelize } from '../config/database';
@@ -19,7 +19,7 @@ export const expenseController = {
   // Create a new expense
   createExpense: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const { groupId, amount, description, date, shares } = req.body;
+    const { groupId, amount, description, date, shares, paidById } = req.body;
     
     // Start a transaction
     const t = await sequelize.transaction();
@@ -29,7 +29,7 @@ export const expenseController = {
       const expense = await Expense.create(
         {
           groupId,
-          paidById: userId,
+          paidById: paidById || userId, // Use provided paidById if available, otherwise current user
           amount,
           description,
           date: new Date(date),
@@ -51,7 +51,7 @@ export const expenseController = {
               expenseId: expense.id,
               userId: parseInt(shareUserId),
               amount: parseFloat(shareAmount as string),
-              isPaid: parseInt(shareUserId) === userId, // Mark as paid if the user paid their own share
+              isPaid: parseInt(shareUserId) === expense.paidById, // Mark as paid if this user is the one who paid
             },
             { transaction: t }
           );
@@ -95,8 +95,15 @@ export const expenseController = {
       throw error;
     }
     
-    // Check if the current user created this expense
-    if (expense.paidById !== userId) {
+    // Check if the current user is in the same group as the expense
+    const isMember = await GroupMember.findOne({
+      where: {
+        groupId: expense.groupId,
+        userId
+      }
+    });
+    
+    if (!isMember) {
       const error: any = new Error('Not authorized to update this expense');
       error.status = 403;
       throw error;

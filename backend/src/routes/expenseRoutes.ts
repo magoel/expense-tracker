@@ -52,6 +52,7 @@ const createExpenseSchema = joi.object({
     joi.string().pattern(/^\d+$/), // User IDs as keys
     joi.number().positive() // Share amounts as values
   ).required(),
+  paidById: joi.number().optional(), // Allow specifying who paid for the expense
 });
 
 const updateExpenseSchema = joi.object({

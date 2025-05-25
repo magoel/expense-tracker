@@ -74,6 +74,7 @@ const CreateExpensePage = () => {
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paidById, setPaidById] = useState<number | null>(null);
 
   // Fetch groups on mount
   useEffect(() => {
@@ -112,6 +113,17 @@ const CreateExpensePage = () => {
       
       setSelectedGroup(group);
       
+      // Set default paidById to current user if they are in the group
+      if (user && group.memberships) {
+        const currentUserInGroup = group.memberships.find(membership => membership.user.id === user.id);
+        if (currentUserInGroup) {
+          setPaidById(user.id);
+        } else if (group.memberships.length > 0) {
+          // If current user is not in the group, set first member as default payer
+          setPaidById(group.memberships[0].user.id);
+        }
+      }
+      
       // Process members from memberships
       if (group.memberships && group.memberships.length > 0) {
         const members = group.memberships.map((membership: any) => membership.user);
@@ -139,6 +151,11 @@ const CreateExpensePage = () => {
   // Handle group change
   const handleGroupChange = (event: SelectChangeEvent<number>) => {
     handleGroupSelect(event.target.value as number);
+  };
+  
+  // Handle paid by change
+  const handlePaidByChange = (event: SelectChangeEvent<number>) => {
+    setPaidById(event.target.value as number);
   };
   
   // Handle amount change
@@ -239,6 +256,10 @@ const CreateExpensePage = () => {
       newErrors.date = 'Date is required';
     }
     
+    if (!paidById) {
+      newErrors.paidBy = 'Please select who paid for the expense';
+    }
+    
     // Check if shares exist
     if (shares.length === 0) {
       newErrors.shares = 'No members to split expense with';
@@ -299,7 +320,8 @@ const CreateExpensePage = () => {
         amount,
         description,
         date: date ? date.toISOString() : new Date().toISOString(),
-        shares: shareData
+        shares: shareData,
+        paidById // Include paidById in the request
       });
       
       const expenseId = createResponse.data.data.expense.id;
@@ -520,6 +542,37 @@ const CreateExpensePage = () => {
                     </Paper>
                   </Grid>
                 ))}
+              </Grid>
+            </CardContent>
+          </Card>
+        )}
+        
+        {selectedGroup && selectedGroup.memberships && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 2 }}>Payment Details</Typography>
+              
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <FormControl fullWidth error={!!errors.paidBy}>
+                    <InputLabel id="paid-by-label">Paid By</InputLabel>
+                    <Select
+                      labelId="paid-by-label"
+                      id="paid-by"
+                      value={paidById || ''}
+                      label="Paid By"
+                      onChange={handlePaidByChange}
+                    >
+                      {selectedGroup.memberships.map((membership) => (
+                        <MenuItem key={membership.userId} value={membership.user.id}>
+                          {membership.user.firstName} {membership.user.lastName}
+                          {membership.user.id === user?.id && ' (you)'}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.paidBy && <FormHelperText>{errors.paidBy}</FormHelperText>}
+                  </FormControl>
+                </Grid>
               </Grid>
             </CardContent>
           </Card>
