@@ -18,6 +18,7 @@ import {
   FormHelperText,
   SelectChangeEvent
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers';
 import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../api';
 
@@ -79,6 +80,7 @@ const CreatePaymentPage = () => {
   const [amount, setAmount] = useState<number | ''>('');
   const [description, setDescription] = useState('');
   const [selectedReceiverId, setSelectedReceiverId] = useState<number | null>(null);
+  const [date, setDate] = useState<Date | null>(new Date()); // Initialize with today's date
   const [balances, setBalances] = useState<Balance[]>([]);
   const [suggestions, setSuggestions] = useState<PaymentSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,6 +214,10 @@ const CreatePaymentPage = () => {
       newErrors.amount = 'Please enter a valid amount';
     }
     
+    if (!date) {
+      newErrors.date = 'Please select a payment date';
+    }
+    
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -233,7 +239,7 @@ const CreatePaymentPage = () => {
         receiverId: selectedReceiverId,
         amount,
         description,
-        date: new Date().toISOString() // Add current date to match the backend schema
+        date: date ? date.toISOString() : new Date().toISOString() // Use selected date or fallback to current date
       });
       
       // Navigate to group detail page
@@ -363,6 +369,21 @@ const CreatePaymentPage = () => {
                       label="Description (Optional)"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
+                    />
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <DatePicker
+                      label="Payment Date"
+                      value={date}
+                      onChange={(newDate) => setDate(newDate)}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          error: !!errors.date,
+                          helperText: errors.date
+                        }
+                      }}
                     />
                   </Grid>
                 </>
