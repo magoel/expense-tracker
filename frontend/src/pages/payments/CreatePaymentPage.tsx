@@ -73,14 +73,17 @@ const CreatePaymentPage = () => {
   const { user } = useAuthStore();
   const searchParams = new URLSearchParams(location.search);
   const groupIdParam = searchParams.get('groupId');
+  const amountParam = searchParams.get('amount');
+  const fromIdParam = searchParams.get('fromId');
+  const toIdParam = searchParams.get('toId');
 
   // State
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [amount, setAmount] = useState<number | ''>('');
+  const [amount, setAmount] = useState<number | ''>(amountParam ? parseFloat(amountParam) : '');
   const [description, setDescription] = useState('');
-  const [selectedReceiverId, setSelectedReceiverId] = useState<number | null>(null);
-  const [selectedPayerId, setSelectedPayerId] = useState<number | null>(null); // Add payerId state
+  const [selectedReceiverId, setSelectedReceiverId] = useState<number | null>(toIdParam ? parseInt(toIdParam) : null);
+  const [selectedPayerId, setSelectedPayerId] = useState<number | null>(fromIdParam ? parseInt(fromIdParam) : null);
   const [date, setDate] = useState<Date | null>(new Date()); // Initialize with today's date
   const [balances, setBalances] = useState<Balance[]>([]);
   const [suggestions, setSuggestions] = useState<PaymentSuggestion[]>([]);
@@ -122,7 +125,11 @@ const CreatePaymentPage = () => {
   const handleGroupSelect = async (groupId: number) => {
     try {
       setLoadingBalances(true);
-      setSelectedReceiverId(null); // Reset receiver when changing groups
+      
+      // Don't reset receiver/payer if they were provided in URL params
+      if (!fromIdParam && !toIdParam) {
+        setSelectedReceiverId(null);
+      }
       
       // Fetch group details with members
       const groupResponse = await api.get(`/groups/${groupId}`);
@@ -140,8 +147,8 @@ const CreatePaymentPage = () => {
       
       setSelectedGroup(group);
       
-      // Set the current user as the default payer
-      if (user?.id) {
+      // Set the current user as the default payer only if not provided in URL
+      if (!fromIdParam && user?.id) {
         setSelectedPayerId(user.id);
       }
       
@@ -328,6 +335,12 @@ const CreatePaymentPage = () => {
       {submitError && (
         <Alert severity="error" sx={{ mb: 3 }}>
           {submitError}
+        </Alert>
+      )}
+      
+      {fromIdParam && toIdParam && amountParam && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          This form has been pre-filled based on a payment suggestion. You can modify the details if needed.
         </Alert>
       )}
       

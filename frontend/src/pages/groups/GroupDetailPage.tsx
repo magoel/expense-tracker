@@ -636,12 +636,24 @@ const GroupDetailPage: React.FC = () => {
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
-                        primary={`${suggestion.from.name} should pay ${suggestion.to.name}`}
-                        secondary={`${group.currency} ${suggestion.amount.toFixed(2)}`}
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography variant="subtitle1">{suggestion.from.name} should pay {suggestion.to.name}</Typography>
+                            <Chip 
+                              label={`${group.currency} ${suggestion.amount.toFixed(2)}`}
+                              color="primary"
+                              size="small"
+                              sx={{ ml: 1 }}
+                            />
+                          </Box>
+                        }
+                        secondary={`Based on current group balances`}
                       />
                       <Button 
-                        variant="outlined" 
+                        variant="contained" 
+                        color="primary"
                         size="small"
+                        startIcon={<Payments />}
                         onClick={() => navigate(`/payments/new?groupId=${groupId}&amount=${suggestion.amount}&fromId=${suggestion.from.id}&toId=${suggestion.to.id}`)}
                       >
                         Record Payment
