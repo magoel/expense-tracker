@@ -232,7 +232,8 @@ const CreatePaymentPage = () => {
         groupId: selectedGroup?.id,
         receiverId: selectedReceiverId,
         amount,
-        description
+        description,
+        date: new Date().toISOString() // Add current date to match the backend schema
       });
       
       // Navigate to group detail page
