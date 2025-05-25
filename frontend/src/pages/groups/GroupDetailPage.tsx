@@ -171,15 +171,18 @@ const GroupDetailPage: React.FC = () => {
   
   // New state for pagination and search
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
+  const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>({
     totalCount: 0,
     totalPages: 1,
     currentPage: 1,
-    limit: 5
+    limit: 10
   });
   const [activityType, setActivityType] = useState<string>('all');
+  const activityListRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchGroup = async () => {
@@ -242,16 +245,21 @@ const GroupDetailPage: React.FC = () => {
     }
   }, [groupId, loading]);
 
+  // Initial data loading
   useEffect(() => {
-    const fetchAllActivity = async () => {
+    const fetchInitialActivity = async () => {
       if (!groupId) return;
       
       setRecentActivityLoading(true);
+      setPage(1); // Reset to first page when component loads
+      setHasMoreItems(true);
+      setActivityItems([]);
+      setAllActivityItems([]);
       
       try {
-        // Fetch all expenses (no pagination for initial load)
+        // Fetch initial batch of expenses
         const expensesResponse = await api.get(`/expenses/group/${groupId}`, {
-          params: { limit: 100 } // Get more expenses initially
+          params: { limit: itemsPerPage * 2 } // Get more initially to have buffer
         });
         
         const expenses = expensesResponse.data.data.expenses.map((expense: Expense) => ({
@@ -263,7 +271,7 @@ const GroupDetailPage: React.FC = () => {
           data: expense
         }));
         
-        // Fetch all payments
+        // Fetch initial batch of payments
         const paymentsResponse = await api.get(`/payments/group/${groupId}`);
         const payments = paymentsResponse.data.data.payments.map((payment: Payment) => ({
           id: payment.id,
@@ -284,13 +292,18 @@ const GroupDetailPage: React.FC = () => {
         // Set pagination meta
         setPaginationMeta({
           totalCount: combined.length,
-          totalPages: Math.ceil(combined.length / pageSize),
-          currentPage: page,
-          limit: pageSize
+          totalPages: Math.ceil(combined.length / itemsPerPage),
+          currentPage: 1,
+          limit: itemsPerPage
         });
         
-        // Apply pagination
-        applyFiltersAndPagination(combined);
+        // Apply initial filters
+        applyFiltersAndPagination(combined, 1);
+        
+        // If we got fewer items than requested, there are no more to load
+        if (combined.length < itemsPerPage) {
+          setHasMoreItems(false);
+        }
       } catch (err) {
         console.error('Failed to fetch activity data:', err);
       } finally {
@@ -299,12 +312,26 @@ const GroupDetailPage: React.FC = () => {
     };
     
     if (!loading && group) {
-      fetchAllActivity();
+      fetchInitialActivity();
     }
-  }, [groupId, group, loading, page, pageSize]);
+  }, [groupId, group, loading, itemsPerPage, searchTerm, activityType]);
+  
+  // Function to load more items when user scrolls
+  const loadMoreItems = React.useCallback(() => {
+    if (isLoadingMore || !hasMoreItems) return;
+    
+    setIsLoadingMore(true);
+    const nextPage = page + 1;
+    setPage(nextPage);
+    
+    // Apply filters and pagination for the next page
+    applyFiltersAndPagination(allActivityItems, nextPage, true);
+    
+    setIsLoadingMore(false);
+  }, [page, hasMoreItems, isLoadingMore, allActivityItems]);
 
-  // Apply search filters and pagination
-  const applyFiltersAndPagination = (items = allActivityItems) => {
+  // Apply search filters and pagination with support for infinite scrolling
+  const applyFiltersAndPagination = (items = allActivityItems, currentPage = page, appendItems = false) => {
     let filteredItems = [...items];
     
     // Apply search if term exists
@@ -341,44 +368,69 @@ const GroupDetailPage: React.FC = () => {
     // Update pagination metadata
     setPaginationMeta({
       totalCount: filteredItems.length,
-      totalPages: Math.ceil(filteredItems.length / pageSize),
-      currentPage: page,
-      limit: pageSize
+      totalPages: Math.ceil(filteredItems.length / itemsPerPage),
+      currentPage: currentPage,
+      limit: itemsPerPage
     });
     
     // Apply pagination
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    setActivityItems(filteredItems.slice(start, end));
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    const newItems = filteredItems.slice(start, end);
+    
+    // Check if there are more items to load
+    setHasMoreItems(end < filteredItems.length);
+    
+    // Either append the new items or replace existing ones
+    if (appendItems) {
+      setActivityItems(prevItems => [...prevItems, ...newItems]);
+    } else {
+      setActivityItems(newItems);
+    }
   };
 
   // Handle search input change
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
     setPage(1); // Reset to first page when searching
-  };
-  
-  // Effect for search filtering
-  useEffect(() => {
-    applyFiltersAndPagination();
-  }, [searchTerm, activityType, page, pageSize]);
-  
-  // Handle page change
-  const handlePageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
-    setPage(value);
-  };
-  
-  // Handle page size change
-  const handlePageSizeChange = (event: SelectChangeEvent<number>) => {
-    setPageSize(event.target.value as number);
-    setPage(1); // Reset to first page when changing page size
+    // Reset the activity items when searching
+    applyFiltersAndPagination(allActivityItems, 1, false);
   };
   
   // Handle activity type filter change
   const handleActivityTypeChange = (event: SelectChangeEvent<string>) => {
     setActivityType(event.target.value);
     setPage(1); // Reset to first page when changing filter
+    // Reset the activity items when filtering
+    applyFiltersAndPagination(allActivityItems, 1, false);
   };
+  
+  // Setup intersection observer for infinite scroll
+  useEffect(() => {
+    const options = {
+      root: null,
+      rootMargin: '20px',
+      threshold: 0.1,
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+      const target = entries[0];
+      if (target.isIntersecting && hasMoreItems && !isLoadingMore && !recentActivityLoading) {
+        loadMoreItems();
+      }
+    }, options);
+    
+    const sentinelElement = activityListRef.current;
+    if (sentinelElement) {
+      observer.observe(sentinelElement);
+    }
+    
+    return () => {
+      if (sentinelElement) {
+        observer.unobserve(sentinelElement);
+      }
+    };
+  }, [loadMoreItems, hasMoreItems, isLoadingMore, recentActivityLoading]);
   
   // Handle membership request approval
   const handleApproveRequest = async (membershipId: number) => {
@@ -868,41 +920,33 @@ const GroupDetailPage: React.FC = () => {
                         }
                       </ListItem>
                     ))}
+                    
+                    {/* Loading indicator and sentinel element for intersection observer */}
+                    <Box 
+                      ref={activityListRef}
+                      sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'center', 
+                        py: 2, 
+                        mt: 1
+                      }}
+                    >
+                      {isLoadingMore && (
+                        <CircularProgress size={24} sx={{ color: 'primary.main' }} />
+                      )}
+                      
+                      {!hasMoreItems && activityItems.length > 0 && (
+                        <Typography variant="body2" color="text.secondary">
+                          — End of list —
+                        </Typography>
+                      )}
+                    </Box>
                   </List>
                   
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                        Show:
-                      </Typography>
-                      <FormControl variant="outlined" size="small" sx={{ minWidth: 60 }}>
-                        <Select
-                          value={pageSize}
-                          onChange={handlePageSizeChange}
-                          sx={{ fontSize: '0.875rem' }}
-                        >
-                          <MenuItem value={5}>5</MenuItem>
-                          <MenuItem value={10}>10</MenuItem>
-                          <MenuItem value={25}>25</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Box>
-                    
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-                        {`${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, paginationMeta.totalCount)} of ${paginationMeta.totalCount}`}
-                      </Typography>
-                      <Pagination 
-                        count={paginationMeta.totalPages}
-                        page={page}
-                        onChange={handlePageChange}
-                        variant="outlined"
-                        shape="rounded"
-                        size="small"
-                        showFirstButton
-                        showLastButton
-                      />
-                    </Box>
+                  <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                      {`Showing ${activityItems.length} of ${paginationMeta.totalCount} items`}
+                    </Typography>
                   </Box>
                 </>
               ) : (
