@@ -133,6 +133,18 @@ interface PendingMembership {
   };
 }
 
+interface PaymentSuggestion {
+  from: {
+    id: number;
+    name: string;
+  };
+  to: {
+    id: number;
+    name: string;
+  };
+  amount: number;
+}
+
 interface PaginationMeta {
   totalCount: number;
   totalPages: number;
@@ -150,6 +162,8 @@ const GroupDetailPage: React.FC = () => {
   const [pendingRequestsLoading, setPendingRequestsLoading] = useState(false);
   const [processingMembershipId, setProcessingMembershipId] = useState<number | null>(null);
   const [membershipActionFeedback, setMembershipActionFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [paymentSuggestions, setPaymentSuggestions] = useState<PaymentSuggestion[]>([]);
+  const [loadingPaymentSuggestions, setLoadingPaymentSuggestions] = useState(false);
   const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
   const [allActivityItems, setAllActivityItems] = useState<ActivityItem[]>([]); // For search filtering
   const [recentActivityLoading, setRecentActivityLoading] = useState(false);
@@ -178,6 +192,9 @@ const GroupDetailPage: React.FC = () => {
         if (response.data.data.group.creatorId === response.data.data.currentUser?.id) {
           fetchPendingRequests();
         }
+
+        // Fetch payment suggestions
+        fetchPaymentSuggestions();
       } catch (err) {
         console.error('Failed to fetch group details:', err);
         setError('Failed to load group details. Please try again later.');
@@ -201,6 +218,21 @@ const GroupDetailPage: React.FC = () => {
         console.error('Failed to fetch pending requests:', err);
       } finally {
         setPendingRequestsLoading(false);
+      }
+    };
+
+    const fetchPaymentSuggestions = async () => {
+      if (!groupId) return;
+      
+      try {
+        setLoadingPaymentSuggestions(true);
+        const response = await api.get(`/stats/group/${groupId}/payment-suggestions`);
+        setPaymentSuggestions(response.data.data.paymentSuggestions || []);
+      } catch (err) {
+        console.error('Failed to fetch payment suggestions:', err);
+        setPaymentSuggestions([]);
+      } finally {
+        setLoadingPaymentSuggestions(false);
       }
     };
 
@@ -581,6 +613,53 @@ const GroupDetailPage: React.FC = () => {
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
+          {/* Payment Suggestions Card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Payment Suggestions
+              </Typography>
+              
+              <Divider sx={{ my: 1 }} />
+              
+              {loadingPaymentSuggestions ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : paymentSuggestions.length > 0 ? (
+                <List>
+                  {paymentSuggestions.map((suggestion, index) => (
+                    <ListItem key={`suggestion-${index}`}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: 'info.main' }}>
+                          <Payments />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={`${suggestion.from.name} should pay ${suggestion.to.name}`}
+                        secondary={`${group.currency} ${suggestion.amount.toFixed(2)}`}
+                      />
+                      <Button 
+                        variant="outlined" 
+                        size="small"
+                        onClick={() => navigate(`/payments/new?groupId=${groupId}&amount=${suggestion.amount}&fromId=${suggestion.from.id}&toId=${suggestion.to.id}`)}
+                      >
+                        Record Payment
+                      </Button>
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Box sx={{ py: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    No payment suggestions available. All balances are settled.
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+          
+          {/* Members Card */}
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
