@@ -52,10 +52,39 @@ export const statsController = {
     
     expenseAttributes.push([fn('sum', col('Expense.amount')), 'total']);
     
+    // Also include the date column directly to satisfy PostgreSQL's GROUP BY requirements
+    expenseAttributes.push(['date', 'date']);
+    
+    // Use Sequelize's fn and col methods to create GROUP BY expressions
+    let groupByClause: any[] = [];
+    
+    if (timeFrame === 'daily') {
+      groupByClause = ['date'];
+    } else if (timeFrame === 'weekly') {
+      groupByClause = [
+        [fn('date_part', 'year', col('date'))], 
+        [fn('date_part', 'week', col('date'))], 
+        'date'
+      ];
+    } else if (timeFrame === 'yearly') {
+      groupByClause = [
+        [fn('date_part', 'year', col('date'))],
+        'date'
+      ];
+    } else { // monthly (default)
+      groupByClause = [
+        [fn('date_part', 'year', col('date'))],
+        [fn('date_part', 'month', col('date'))],
+        'date'
+      ];
+    }
+    
+    // Use a simplified approach for the GROUP BY clause that matches the selected columns
     const expenses = await Expense.findAll({
       attributes: expenseAttributes,
       where: { groupId },
-      group,
+      // Use the aliases from the attribute list to create a simpler GROUP BY clause
+      group: ['period', 'year', timeFrame === 'monthly' ? 'month' : timeFrame === 'weekly' ? 'week' : '', 'date'],
       order: order.map(field => [field, 'ASC']),
       raw: true,
     });
@@ -67,7 +96,7 @@ export const statsController = {
         [fn('sum', col('Expense.amount')), 'total'],
       ],
       where: { groupId },
-      group: ['paidById'],
+      group: ['paidById', 'paidBy.id', 'paidBy.firstName', 'paidBy.lastName'],
       include: [
         {
           model: User,
