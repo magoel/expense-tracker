@@ -8,6 +8,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListItemSecondaryAction,
   Button,
   Stack,
   Grid,
@@ -559,7 +560,7 @@ const GroupDetailPage: React.FC = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 3, flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
         <Button 
           variant="outlined" 
           startIcon={<ArrowBack />} 
@@ -568,12 +569,13 @@ const GroupDetailPage: React.FC = () => {
           Back to Groups
         </Button>
 
-        <Stack direction="row" spacing={2}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ width: { xs: '100%', sm: 'auto' } }}>
           <Button 
             variant="contained" 
             color="primary" 
             startIcon={<Add />}
             onClick={() => navigate(`/expenses/new?groupId=${groupId}`)}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Add Expense
           </Button>
@@ -582,6 +584,7 @@ const GroupDetailPage: React.FC = () => {
             color="primary" 
             startIcon={<Payments />}
             onClick={() => navigate(`/payments/new?groupId=${groupId}`)}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Record Payment
           </Button>
@@ -593,11 +596,11 @@ const GroupDetailPage: React.FC = () => {
           {group.name}
         </Typography>
         
-        <Typography variant="body1" color="text.secondary" paragraph>
+        <Typography variant="body1" color="text.secondary" paragraph sx={{ mb: 2 }}>
           {group.description || 'No description provided'}
         </Typography>
         
-        <Box sx={{ display: 'flex', gap: 2, mt: 2, mb: 3 }}>
+        <Box sx={{ display: 'flex', gap: 2, mt: 2, mb: 1, flexWrap: 'wrap' }}>
           <Chip 
             label={`Group Code: ${group.code}`} 
             color="primary" 
@@ -612,9 +615,9 @@ const GroupDetailPage: React.FC = () => {
       </Paper>
 
       <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
+        <Grid item xs={12} lg={6}>
           {/* Payment Suggestions Card */}
-          <Card sx={{ mb: 3 }}>
+          <Card sx={{ height: 'fit-content' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Payment Suggestions
@@ -629,7 +632,15 @@ const GroupDetailPage: React.FC = () => {
               ) : paymentSuggestions.length > 0 ? (
                 <List>
                   {paymentSuggestions.map((suggestion, index) => (
-                    <ListItem key={`suggestion-${index}`}>
+                    <ListItem 
+                      key={`suggestion-${index}`}
+                      sx={{ 
+                        '&:hover': {
+                          backgroundColor: 'action.hover',
+                          borderRadius: 1
+                        }
+                      }}
+                    >
                       <ListItemAvatar>
                         <Avatar sx={{ bgcolor: 'info.main' }}>
                           <Payments />
@@ -637,32 +648,44 @@ const GroupDetailPage: React.FC = () => {
                       </ListItemAvatar>
                       <ListItemText
                         primary={
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Typography variant="subtitle1">{suggestion.from.name} should pay {suggestion.to.name}</Typography>
+                          <Box sx={{ pr: 24 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 0.5 }}>
+                              <Typography variant="body1" sx={{ fontSize: '0.95rem' }}>
+                                {suggestion.from.name} should pay {suggestion.to.name}
+                              </Typography>
+                            </Box>
                             <Chip 
                               label={`${group.currency} ${suggestion.amount.toFixed(2)}`}
                               color="primary"
                               size="small"
-                              sx={{ ml: 1 }}
+                              sx={{ minWidth: '80px', fontSize: '0.85rem' }}
                             />
                           </Box>
                         }
                         secondary={`Based on current group balances`}
                       />
-                      <Button 
-                        variant="contained" 
-                        color="primary"
-                        size="small"
-                        startIcon={<Payments />}
-                        onClick={() => navigate(`/payments/new?groupId=${groupId}&amount=${suggestion.amount}&fromId=${suggestion.from.id}&toId=${suggestion.to.id}`)}
-                      >
-                        Record Payment
-                      </Button>
+                      <ListItemSecondaryAction sx={{ right: 16, top: '50%', transform: 'translateY(-50%)' }} >
+                        <Button 
+                          variant="contained" 
+                          color="primary"
+                          size="small"
+                          startIcon={<Payments />}
+                          onClick={() => navigate(`/payments/new?groupId=${groupId}&amount=${suggestion.amount}&fromId=${suggestion.from.id}&toId=${suggestion.to.id}`)}
+                          sx={{ 
+                            minWidth: 'auto',
+                            fontSize: '0.8rem',
+                            px: 2,
+                            py: 0.5
+                          }}
+                        >
+                          Record Payment
+                        </Button>
+                      </ListItemSecondaryAction>
                     </ListItem>
                   ))}
                 </List>
               ) : (
-                <Box sx={{ py: 2 }}>
+                <Box sx={{ py: 3, textAlign: 'center' }}>
                   <Typography variant="body2" color="text.secondary">
                     No payment suggestions available. All balances are settled.
                   </Typography>
@@ -672,7 +695,7 @@ const GroupDetailPage: React.FC = () => {
           </Card>
           
           {/* Members Card */}
-          <Card>
+          <Card sx={{ height: 'fit-content' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Members
@@ -705,27 +728,6 @@ const GroupDetailPage: React.FC = () => {
                       {pendingRequests.map((request) => (
                         <ListItem 
                           key={`pending-${request.id}`}
-                          secondaryAction={
-                            <Box>
-                              <Button 
-                                size="small" 
-                                color="primary"
-                                onClick={() => handleApproveRequest(request.id)}
-                                sx={{ mr: 1 }}
-                                disabled={processingMembershipId === request.id}
-                              >
-                                Approve
-                              </Button>
-                              <Button 
-                                size="small"
-                                color="error"
-                                onClick={() => handleRejectRequest(request.id)}
-                                disabled={processingMembershipId === request.id}
-                              >
-                                Reject
-                              </Button>
-                            </Box>
-                          }
                         >
                           <ListItemAvatar>
                             <Avatar sx={{ bgcolor: 'warning.light' }}>
@@ -737,6 +739,30 @@ const GroupDetailPage: React.FC = () => {
                             secondary={request.user.email}
                             primaryTypographyProps={{ variant: 'body2' }}
                           />
+                          <ListItemSecondaryAction>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              <Button 
+                                size="small" 
+                                color="primary"
+                                variant="contained"
+                                onClick={() => handleApproveRequest(request.id)}
+                                disabled={processingMembershipId === request.id}
+                                sx={{ minWidth: 'auto', px: 2 }}
+                              >
+                                Approve
+                              </Button>
+                              <Button 
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                onClick={() => handleRejectRequest(request.id)}
+                                disabled={processingMembershipId === request.id}
+                                sx={{ minWidth: 'auto', px: 2 }}
+                              >
+                                Reject
+                              </Button>
+                            </Box>
+                          </ListItemSecondaryAction>
                         </ListItem>
                       ))}
                     </List>
@@ -774,8 +800,8 @@ const GroupDetailPage: React.FC = () => {
           </Card>
         </Grid>
         
-        <Grid item xs={12} md={6}>
-          <Card>
+        <Grid item xs={12} lg={6}>
+          <Card sx={{ height: 'fit-content' }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 Recent Activity
@@ -783,7 +809,7 @@ const GroupDetailPage: React.FC = () => {
               
               <Box sx={{ mb: 2 }}>
                 <Grid container spacing={2} alignItems="center">
-                  <Grid item xs={12} sm={7}>
+                  <Grid item xs={12} md={7}>
                     <TextField
                       fullWidth
                       placeholder="Search by description, amount, or user"
@@ -800,7 +826,7 @@ const GroupDetailPage: React.FC = () => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={5}>
+                  <Grid item xs={12} md={5}>
                     <FormControl fullWidth size="small">
                       <Select
                         value={activityType}
@@ -844,29 +870,39 @@ const GroupDetailPage: React.FC = () => {
                     ))}
                   </List>
                   
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <FormControl variant="outlined" size="small" sx={{ minWidth: 80 }}>
-                      <Select
-                        value={pageSize}
-                        onChange={handlePageSizeChange}
-                      >
-                        <MenuItem value={5}>5</MenuItem>
-                        <MenuItem value={10}>10</MenuItem>
-                        <MenuItem value={25}>25</MenuItem>
-                      </Select>
-                    </FormControl>
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                        Show:
+                      </Typography>
+                      <FormControl variant="outlined" size="small" sx={{ minWidth: 60 }}>
+                        <Select
+                          value={pageSize}
+                          onChange={handlePageSizeChange}
+                          sx={{ fontSize: '0.875rem' }}
+                        >
+                          <MenuItem value={5}>5</MenuItem>
+                          <MenuItem value={10}>10</MenuItem>
+                          <MenuItem value={25}>25</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
                     
-                    <Pagination 
-                      count={paginationMeta.totalPages} 
-                      page={page}
-                      onChange={handlePageChange} 
-                      color="primary" 
-                      size="medium"
-                    />
-                    
-                    <Typography variant="body2" color="text.secondary">
-                      {`${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, paginationMeta.totalCount)} of ${paginationMeta.totalCount}`}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+                        {`${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, paginationMeta.totalCount)} of ${paginationMeta.totalCount}`}
+                      </Typography>
+                      <Pagination 
+                        count={paginationMeta.totalPages}
+                        page={page}
+                        onChange={handlePageChange}
+                        variant="outlined"
+                        shape="rounded"
+                        size="small"
+                        showFirstButton
+                        showLastButton
+                      />
+                    </Box>
                   </Box>
                 </>
               ) : (
