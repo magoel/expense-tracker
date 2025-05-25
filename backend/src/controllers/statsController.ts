@@ -50,7 +50,7 @@ export const statsController = {
       expenseAttributes.push([fn('date_part', 'week', col('date')), 'week']);
     }
     
-    expenseAttributes.push([fn('sum', col('amount')), 'total']);
+    expenseAttributes.push([fn('sum', col('Expense.amount')), 'total']);
     
     const expenses = await Expense.findAll({
       attributes: expenseAttributes,
@@ -64,7 +64,7 @@ export const statsController = {
     const expensesByPayer = await Expense.findAll({
       attributes: [
         [col('paidById'), 'userId'],
-        [fn('sum', col('amount')), 'total'],
+        [fn('sum', col('Expense.amount')), 'total'],
       ],
       where: { groupId },
       group: ['paidById'],
@@ -96,7 +96,7 @@ export const statsController = {
     const paidExpenses = await Expense.findAll({
       attributes: [
         'paidById',
-        [fn('sum', col('amount')), 'paidAmount'],
+        [fn('sum', col('Expense.amount')), 'paidAmount'],
       ],
       where: { groupId },
       group: ['paidById'],
@@ -107,7 +107,7 @@ export const statsController = {
     const owedShares = await ExpenseShare.findAll({
       attributes: [
         'userId',
-        [fn('sum', col('amount')), 'owedAmount'],
+        [fn('sum', col('ExpenseShare.amount')), 'owedAmount'],
       ],
       include: [
         {
@@ -125,7 +125,7 @@ export const statsController = {
     const paymentsSent = await Payment.findAll({
       attributes: [
         'payerId',
-        [fn('sum', col('amount')), 'sentAmount'],
+        [fn('sum', col('Payment.amount')), 'sentAmount'],
       ],
       where: { groupId },
       group: ['payerId'],
@@ -136,7 +136,7 @@ export const statsController = {
     const paymentsReceived = await Payment.findAll({
       attributes: [
         'receiverId',
-        [fn('sum', col('amount')), 'receivedAmount'],
+        [fn('sum', col('Payment.amount')), 'receivedAmount'],
       ],
       where: { groupId },
       group: ['receiverId'],
@@ -285,14 +285,20 @@ export const statsController = {
     }
     
     // Get all groups that the user is a member of
-    const memberGroups = await GroupMember.findAll({
-      where: {
-        userId,
-        status: 'active'
-      },
-      attributes: ['groupId'],
-      raw: true
-    });
+    let memberGroups: any[] = [];
+    try {
+      memberGroups = await GroupMember.findAll({
+        where: {
+          userId,
+          status: 'active'
+        },
+        attributes: ['groupId'],
+        raw: true
+      });
+    } catch (err) {
+      console.error('Error fetching member groups:', err);
+      memberGroups = [];
+    }
     
     const groupIds = memberGroups.map((member: any) => member.groupId);
     
@@ -319,59 +325,83 @@ export const statsController = {
         }
         
         // Calculate what user has paid (positive)
-        const paidExpenses = await Expense.findOne({
-          attributes: [
-            [fn('COALESCE', fn('sum', col('amount')), 0), 'paidAmount']
-          ],
-          where: { 
-            groupId,
-            paidById: userId
-          },
-          raw: true
-        });
+        let paidExpenses;
+        try {
+          paidExpenses = await Expense.findOne({
+            attributes: [
+              [fn('COALESCE', fn('sum', col('Expense.amount')), 0), 'paidAmount']
+            ],
+            where: { 
+              groupId,
+              paidById: userId
+            },
+            raw: true
+          });
+        } catch (err) {
+          console.log('Error fetching paid expenses, setting to default value of 0');
+          paidExpenses = { paidAmount: 0 };
+        }
         
         // Calculate what user owes (negative)
-        const owedShares = await ExpenseShare.findOne({
-          attributes: [
-            [fn('COALESCE', fn('sum', col('amount')), 0), 'owedAmount']
-          ],
-          where: {
-            userId
-          },
-          include: [
-            {
-              model: Expense,
-              as: 'expense',
-              attributes: [],
-              where: { groupId }
-            }
-          ],
-          raw: true
-        });
+        let owedShares;
+        try {
+          owedShares = await ExpenseShare.findOne({
+            attributes: [
+              [fn('COALESCE', fn('sum', col('ExpenseShare.amount')), 0), 'owedAmount']
+            ],
+            where: {
+              userId
+            },
+            include: [
+              {
+                model: Expense,
+                as: 'expense',
+                attributes: [],
+                where: { groupId }
+              }
+            ],
+            raw: true
+          });
+        } catch (err) {
+          console.log('Error fetching owed shares, setting to default value of 0');
+          owedShares = { owedAmount: 0 };
+        }
         
         // Calculate payments sent by user (negative)
-        const paymentsSent = await Payment.findOne({
-          attributes: [
-            [fn('COALESCE', fn('sum', col('amount')), 0), 'sentAmount']
-          ],
-          where: {
-            groupId,
-            payerId: userId
-          },
-          raw: true
-        });
+        let paymentsSent;
+        try {
+          paymentsSent = await Payment.findOne({
+            attributes: [
+              [fn('COALESCE', fn('sum', col('Payment.amount')), 0), 'sentAmount']
+            ],
+            where: {
+              groupId,
+              payerId: userId
+            },
+            raw: true
+          });
+        } catch (err) {
+          console.log('Error fetching payments sent, setting to default value of 0');
+          paymentsSent = { sentAmount: 0 };
+        }
         
         // Calculate payments received by user (positive)
-        const paymentsReceived = await Payment.findOne({
-          attributes: [
-            [fn('COALESCE', fn('sum', col('amount')), 0), 'receivedAmount']
-          ],
-          where: {
-            groupId,
-            receiverId: userId
-          },
-          raw: true
-        });
+        let paymentsReceived;
+        try {
+          paymentsReceived = await Payment.findOne({
+            attributes: [
+              [fn('COALESCE', fn('sum', col('Payment.amount')), 0), 'receivedAmount']
+            ],
+            where: {
+              groupId,
+              receiverId: userId
+            },
+            raw: true
+          });
+        } catch (err) {
+          console.log('Error fetching payments received, setting to default value of 0');
+          paymentsReceived = { receivedAmount: 0 };
+        }
         
         // Calculate balance: (paid + received) - (owed + sent)
         const paidAmount = parseFloat((paidExpenses as any)?.paidAmount || 0);
@@ -409,77 +439,107 @@ export const statsController = {
 // Helper function to get balances
 async function getBalances(groupId: string | number) {
   // Calculate what each user has paid (positive)
-  const paidExpenses = await Expense.findAll({
-    attributes: [
-      'paidById',
-      [fn('sum', col('amount')), 'paidAmount'],
-    ],
-    where: { groupId },
-    group: ['paidById'],
-    raw: true,
-  });
+  let paidExpenses: any[] = [];
+  try {
+    paidExpenses = await Expense.findAll({
+      attributes: [
+        'paidById',
+        [fn('sum', col('Expense.amount')), 'paidAmount'],
+      ],
+      where: { groupId },
+      group: ['paidById'],
+      raw: true,
+    });
+  } catch (err) {
+    console.error('Error fetching paid expenses in getBalances:', err);
+    paidExpenses = [];
+  }
   
   // Calculate what each user owes (negative)
-  const owedShares = await ExpenseShare.findAll({
-    attributes: [
-      'userId',
-      [fn('sum', col('amount')), 'owedAmount'],
-    ],
-    include: [
-      {
-        model: Expense,
-        as: 'expense',
-        attributes: [],
-        where: { groupId },
-      },
-    ],
-    group: ['userId'],
-    raw: true,
-  });
+  let owedShares: any[] = [];
+  try {
+    owedShares = await ExpenseShare.findAll({
+      attributes: [
+        'userId',
+        [fn('sum', col('ExpenseShare.amount')), 'owedAmount'],
+      ],
+      include: [
+        {
+          model: Expense,
+          as: 'expense',
+          attributes: [],
+          where: { groupId },
+        },
+      ],
+      group: ['userId'],
+      raw: true,
+    });
+  } catch (err) {
+    console.error('Error fetching owed shares in getBalances:', err);
+    owedShares = [];
+  }
   
   // Calculate payments made by each user (negative)
-  const paymentsSent = await Payment.findAll({
-    attributes: [
-      'payerId',
-      [fn('sum', col('amount')), 'sentAmount'],
-    ],
-    where: { groupId },
-    group: ['payerId'],
-    raw: true,
-  });
+  let paymentsSent: any[] = [];
+  try {
+    paymentsSent = await Payment.findAll({
+      attributes: [
+        'payerId',
+        [fn('sum', col('Payment.amount')), 'sentAmount'],
+      ],
+      where: { groupId },
+      group: ['payerId'],
+      raw: true,
+    });
+  } catch (err) {
+    console.error('Error fetching payments sent in getBalances:', err);
+    paymentsSent = [];
+  }
   
   // Calculate payments received by each user (positive)
-  const paymentsReceived = await Payment.findAll({
-    attributes: [
-      'receiverId',
-      [fn('sum', col('amount')), 'receivedAmount'],
-    ],
-    where: { groupId },
-    group: ['receiverId'],
-    raw: true,
-  });
+  let paymentsReceived: any[] = [];
+  try {
+    paymentsReceived = await Payment.findAll({
+      attributes: [
+        'receiverId',
+        [fn('sum', col('Payment.amount')), 'receivedAmount'],
+      ],
+      where: { groupId },
+      group: ['receiverId'],
+      raw: true,
+    });
+  } catch (err) {
+    console.error('Error fetching payments received in getBalances:', err);
+    paymentsReceived = [];
+  }
   
   // Get all users in group
-  const users = await User.findAll({
-    attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
-    include: [
-      {
-        model: ExpenseShare,
-        as: 'expenseShares',
-        attributes: [],
-        include: [
-          {
-            model: Expense,
-            as: 'expense',
-            attributes: [],
-            where: { groupId },
-          },
-        ],
-      },
-    ],
-    group: ['User.id'],
-    raw: true,
-  });
+  let users: any[] = [];
+  try {
+    users = await User.findAll({
+      attributes: ['id', 'firstName', 'lastName', 'email', 'avatarUrl'],
+      include: [
+        {
+          model: ExpenseShare,
+          as: 'expenseShares',
+          attributes: [],
+          include: [
+            {
+              model: Expense,
+              as: 'expense',
+              attributes: [],
+              where: { groupId },
+            },
+          ],
+        },
+      ],
+      group: ['User.id'],
+      raw: true,
+    });
+  } catch (err) {
+    console.error('Error fetching users in getBalances:', err);
+    users = [];
+  }
   
   // Calculate overall balance for each user
   return users.map(user => {
