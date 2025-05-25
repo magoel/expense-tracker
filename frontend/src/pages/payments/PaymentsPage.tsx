@@ -107,7 +107,15 @@ const PaymentsPage = () => {
         });
 
         setPayments(response.data.data.payments);
-        setTotalCount(response.data.data.pagination.totalCount);
+        
+        // Check if pagination info exists (it does for /payments/recent but not for /payments/group/:groupId)
+        if (response.data.data.pagination) {
+          setTotalCount(response.data.data.pagination.totalCount);
+        } else {
+          // If no pagination info, use the length of payments array as total count
+          setTotalCount(response.data.data.payments.length);
+        }
+        
         setLoading(false);
       } catch (error) {
         console.error('Error fetching payments', error);
@@ -269,11 +277,12 @@ const PaymentsPage = () => {
               <TablePagination
                 component="div"
                 count={totalCount}
-                page={page}
+                page={selectedGroup !== 'all' ? 0 : page}
                 onPageChange={handleChangePage}
                 rowsPerPage={rowsPerPage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
                 rowsPerPageOptions={[5, 10, 25]}
+                disabled={selectedGroup !== 'all'} // Disable pagination when a group is selected
               />
             </TableContainer>
           )}
