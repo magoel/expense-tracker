@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -63,6 +63,7 @@ interface Group {
 
 const PaymentsPage = () => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -93,7 +94,7 @@ const PaymentsPage = () => {
       try {
         setLoading(true);
 
-        let url = '/payments';
+        let url = '/payments/recent';
         if (selectedGroup !== 'all') {
           url = `/payments/group/${selectedGroup}`;
         }
@@ -216,15 +217,29 @@ const PaymentsPage = () => {
                 </TableHead>
                 <TableBody>
                   {payments.map((payment) => (
-                    <TableRow key={payment.id} hover>
+                    <TableRow 
+                      key={payment.id} 
+                      hover
+                      onClick={() => navigate(`/payments/${payment.id}`)}
+                      sx={{
+                        cursor: 'pointer',
+                        '&:hover': {
+                          backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                        },
+                      }}>
                       <TableCell>
-                        <Chip
-                          label={payment.group.name}
-                          size="small"
-                          component={RouterLink}
-                          to={`/groups/${payment.group.id}`}
-                          clickable
-                        />
+                        {payment.group ? (
+                          <Chip
+                            label={payment.group.name}
+                            size="small"
+                            component={RouterLink}
+                            to={`/groups/${payment.group.id}`}
+                            clickable
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">No group</Typography>
+                        )}
                       </TableCell>
                       <TableCell>
                         {payment.payer.id === user?.id
@@ -236,11 +251,14 @@ const PaymentsPage = () => {
                           ? <Typography fontWeight="bold">You</Typography>
                           : `${payment.receiver.firstName} ${payment.receiver.lastName}`}
                       </TableCell>
-                      <TableCell>{formatCurrency(payment.amount, payment.group.currency)}</TableCell>
+                      <TableCell>{formatCurrency(payment.amount, payment.group?.currency || 'USD')}</TableCell>
                       <TableCell>{payment.description || '-'}</TableCell>
                       <TableCell>{formatDate(payment.createdAt)}</TableCell>
                       <TableCell align="right">
-                        <IconButton size="small">
+                        <IconButton 
+                          size="small"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreVertIcon fontSize="small" />
                         </IconButton>
                       </TableCell>
