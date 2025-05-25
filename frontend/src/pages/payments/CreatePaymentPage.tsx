@@ -47,11 +47,11 @@ interface Balance {
 
 interface PaymentSuggestion {
   from: {
-    userId: number;
+    id: number;
     name: string;
   };
   to: {
-    userId: number;
+    id: number;
     name: string;
   };
   amount: number;
@@ -144,9 +144,25 @@ const CreatePaymentPage = () => {
 
   // Apply suggestion
   const applySuggestion = (suggestion: PaymentSuggestion) => {
-    if (suggestion.from.userId === user?.id) {
-      setSelectedReceiverId(suggestion.to.userId);
-      setAmount(suggestion.amount);
+    if (!suggestion || !user) return;
+    
+    if (suggestion.from.id === user.id) {
+      if (!selectedGroup || !selectedGroup.members) {
+        console.error('No selected group or members when trying to apply suggestion');
+        return;
+      }
+      
+      // Find the group member that matches the suggestion recipient
+      const matchingMember = selectedGroup.members.find(
+        member => member.userId === suggestion.to.id
+      );
+      
+      if (matchingMember) {
+        setSelectedReceiverId(matchingMember.userId);
+        setAmount(suggestion.amount);
+      } else {
+        console.error('Could not find matching member for suggestion:', suggestion);
+      }
     }
   };
   
@@ -213,7 +229,7 @@ const CreatePaymentPage = () => {
     if (!suggestions || !Array.isArray(suggestions)) {
       return [];
     }
-    return suggestions.filter(suggestion => suggestion.from.userId === user?.id);
+    return suggestions.filter(suggestion => suggestion.from.id === user?.id);
   };
   
   if (loadingGroups) {
