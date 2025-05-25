@@ -121,8 +121,13 @@ const CreatePaymentPage = () => {
       setBalances(balancesResponse.data.data.balances);
       
       // Fetch payment suggestions
-      const suggestionsResponse = await api.get(`/stats/group/${groupId}/payment-suggestions`);
-      setSuggestions(suggestionsResponse.data.data.suggestions);
+      try {
+        const suggestionsResponse = await api.get(`/stats/group/${groupId}/payment-suggestions`);
+        setSuggestions(suggestionsResponse.data.data.paymentSuggestions || []);
+      } catch (error) {
+        console.error('Error fetching payment suggestions:', error);
+        setSuggestions([]);
+      }
       
       setLoadingBalances(false);
     } catch (error) {
@@ -205,6 +210,9 @@ const CreatePaymentPage = () => {
   
   // Get user-specific suggestions
   const getUserSuggestions = () => {
+    if (!suggestions || !Array.isArray(suggestions)) {
+      return [];
+    }
     return suggestions.filter(suggestion => suggestion.from.userId === user?.id);
   };
   
