@@ -25,16 +25,25 @@ interface Group {
   id: number;
   name: string;
   currency: string;
-  members: GroupMember[];
+  members?: GroupMember[];
+  memberships?: GroupMember[]; // Adding this field as it might be what the backend returns
 }
 
 interface GroupMember {
   id: number;
   userId: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  avatarUrl?: string;
+  groupId: number;
+  status: string;
+  joinedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  user: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string;
+    avatarUrl: string | null;
+  };
 }
 
 interface Balance {
@@ -110,10 +119,22 @@ const CreatePaymentPage = () => {
   const handleGroupSelect = async (groupId: number) => {
     try {
       setLoadingBalances(true);
+      setSelectedReceiverId(null); // Reset receiver when changing groups
       
       // Fetch group details with members
       const groupResponse = await api.get(`/groups/${groupId}`);
+      console.log('Group API response:', groupResponse.data);
       const group = groupResponse.data.data.group;
+      
+      // Check if group has members
+      const membersArray = group.memberships || group.members;
+      if (!membersArray || membersArray.length === 0) {
+        console.warn('Group has no members or members is not loaded correctly:', group);
+      } else {
+        console.log('Group members loaded:', membersArray);
+        console.log('Group structure:', Object.keys(group));
+      }
+      
       setSelectedGroup(group);
       
       // Fetch balances for the group
@@ -123,6 +144,7 @@ const CreatePaymentPage = () => {
       // Fetch payment suggestions
       try {
         const suggestionsResponse = await api.get(`/stats/group/${groupId}/payment-suggestions`);
+        console.log('Payment suggestions response:', suggestionsResponse.data);
         setSuggestions(suggestionsResponse.data.data.paymentSuggestions || []);
       } catch (error) {
         console.error('Error fetching payment suggestions:', error);
@@ -147,13 +169,21 @@ const CreatePaymentPage = () => {
     if (!suggestion || !user) return;
     
     if (suggestion.from.id === user.id) {
-      if (!selectedGroup || !selectedGroup.members) {
-        console.error('No selected group or members when trying to apply suggestion');
+      if (!selectedGroup) {
+        console.error('No selected group when trying to apply suggestion');
+        return;
+      }
+      
+      // Check both members and memberships since there seems to be a field name mismatch
+      const membersArray = selectedGroup.memberships || selectedGroup.members;
+      
+      if (!membersArray || membersArray.length === 0) {
+        console.error('No members in group when trying to apply suggestion');
         return;
       }
       
       // Find the group member that matches the suggestion recipient
-      const matchingMember = selectedGroup.members.find(
+      const matchingMember = membersArray.find(
         member => member.userId === suggestion.to.id
       );
       
@@ -216,12 +246,25 @@ const CreatePaymentPage = () => {
   
   // Get list of people user can pay
   const getPossibleReceivers = () => {
-    if (!selectedGroup || !selectedGroup.members) {
+    if (!selectedGroup) {
+      console.log('No selected group');
       return [];
     }
     
+    // Check both members and memberships since there seems to be a field name mismatch
+    const membersArray = selectedGroup.memberships || selectedGroup.members;
+    
+    if (!membersArray || !Array.isArray(membersArray) || membersArray.length === 0) {
+      console.log('No members in the group or members is not an array', selectedGroup);
+      return [];
+    }
+    
+    console.log('Group members array:', membersArray);
+    
     // Filter out current user
-    return selectedGroup.members.filter(member => member.userId !== user?.id);
+    const receivers = membersArray.filter(member => member.userId !== user?.id);
+    console.log('Filtered receivers:', receivers);
+    return receivers;
   };
   
   // Get user-specific suggestions
@@ -288,7 +331,7 @@ const CreatePaymentPage = () => {
                       >
                         {getPossibleReceivers().map((member) => (
                           <MenuItem key={member.userId} value={member.userId}>
-                            {member.firstName} {member.lastName}
+                            {member.user.firstName} {member.user.lastName}
                           </MenuItem>
                         ))}
                       </Select>
@@ -375,9 +418,9 @@ const CreatePaymentPage = () => {
                   <Alert severity="success">
                     <Typography variant="body2">
                       You're about to pay {selectedGroup.currency} {(amount as number).toFixed(2)} to {
-                        getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.firstName || ''
+                        getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.user?.firstName || ''
                       } {
-                        getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.lastName || ''
+                        getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.user?.lastName || ''
                       }
                     </Typography>
                   </Alert>
