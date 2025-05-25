@@ -119,7 +119,10 @@ export const authController = {
     }
     
     const authUser = req.user as any;
-    const user = await User.findByPk(authUser.id);
+    const userId = authUser.id;
+    
+    // Find user 
+    const user = await User.findByPk(userId);
     
     if (!user) {
       const error: any = new Error('User not found');
@@ -127,10 +130,42 @@ export const authController = {
       throw error;
     }
     
+    // Get additional user stats
+    const { GroupMember, Expense } = require('../models');
+    
+    // Count user's groups
+    const groupCount = await GroupMember.count({
+      where: {
+        userId,
+        status: 'active',
+      },
+    });
+
+    // Count user's expenses (either paid by or shares)
+    const expensesAsPayer = await Expense.count({
+      where: {
+        paidById: userId,
+      },
+    });
+
+    const { ExpenseShare } = require('../models');
+    const expenseSharesCount = await ExpenseShare.count({
+      where: {
+        userId,
+      },
+    });
+
+    // Combine the user object with the counts
+    const userWithStats = {
+      ...user.toSafeObject(),
+      groupCount,
+      expenseCount: expensesAsPayer + expenseSharesCount, 
+    };
+    
     res.status(200).json({
       success: true,
       data: {
-        user: user.toSafeObject(),
+        user: userWithStats,
       },
     });
   }),
