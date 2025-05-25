@@ -80,6 +80,7 @@ const CreatePaymentPage = () => {
   const [amount, setAmount] = useState<number | ''>('');
   const [description, setDescription] = useState('');
   const [selectedReceiverId, setSelectedReceiverId] = useState<number | null>(null);
+  const [selectedPayerId, setSelectedPayerId] = useState<number | null>(null); // Add payerId state
   const [date, setDate] = useState<Date | null>(new Date()); // Initialize with today's date
   const [balances, setBalances] = useState<Balance[]>([]);
   const [suggestions, setSuggestions] = useState<PaymentSuggestion[]>([]);
@@ -139,6 +140,11 @@ const CreatePaymentPage = () => {
       
       setSelectedGroup(group);
       
+      // Set the current user as the default payer
+      if (user?.id) {
+        setSelectedPayerId(user.id);
+      }
+      
       // Fetch balances for the group
       const balancesResponse = await api.get(`/stats/group/${groupId}/balances`);
       setBalances(balancesResponse.data.data.balances);
@@ -168,33 +174,35 @@ const CreatePaymentPage = () => {
 
   // Apply suggestion
   const applySuggestion = (suggestion: PaymentSuggestion) => {
-    if (!suggestion || !user) return;
+    if (!suggestion || !selectedGroup) {
+      console.error('No suggestion or selected group when trying to apply suggestion');
+      return;
+    }
     
-    if (suggestion.from.id === user.id) {
-      if (!selectedGroup) {
-        console.error('No selected group when trying to apply suggestion');
-        return;
-      }
-      
-      // Check both members and memberships since there seems to be a field name mismatch
-      const membersArray = selectedGroup.memberships || selectedGroup.members;
-      
-      if (!membersArray || membersArray.length === 0) {
-        console.error('No members in group when trying to apply suggestion');
-        return;
-      }
-      
-      // Find the group member that matches the suggestion recipient
-      const matchingMember = membersArray.find(
-        member => member.userId === suggestion.to.id
-      );
-      
-      if (matchingMember) {
-        setSelectedReceiverId(matchingMember.userId);
-        setAmount(suggestion.amount);
-      } else {
-        console.error('Could not find matching member for suggestion:', suggestion);
-      }
+    // Check both members and memberships since there seems to be a field name mismatch
+    const membersArray = selectedGroup.memberships || selectedGroup.members;
+    
+    if (!membersArray || membersArray.length === 0) {
+      console.error('No members in group when trying to apply suggestion');
+      return;
+    }
+    
+    // Find the group member that matches the suggestion payer (from)
+    const payerMember = membersArray.find(
+      member => member.userId === suggestion.from.id
+    );
+    
+    // Find the group member that matches the suggestion recipient (to)
+    const receiverMember = membersArray.find(
+      member => member.userId === suggestion.to.id
+    );
+    
+    if (payerMember && receiverMember) {
+      setSelectedPayerId(payerMember.userId);
+      setSelectedReceiverId(receiverMember.userId);
+      setAmount(suggestion.amount);
+    } else {
+      console.error('Could not find matching members for suggestion:', suggestion);
     }
   };
   
@@ -206,8 +214,16 @@ const CreatePaymentPage = () => {
       newErrors.group = 'Please select a group';
     }
     
+    if (!selectedPayerId) {
+      newErrors.payer = 'Please select a person who is paying';
+    }
+    
     if (!selectedReceiverId) {
       newErrors.receiver = 'Please select a person to pay';
+    }
+    
+    if (selectedPayerId && selectedReceiverId && selectedPayerId === selectedReceiverId) {
+      newErrors.same = 'Payer and receiver cannot be the same person';
     }
     
     if (!amount || amount <= 0) {
@@ -236,6 +252,7 @@ const CreatePaymentPage = () => {
       
       await api.post('/payments', {
         groupId: selectedGroup?.id,
+        payerId: selectedPayerId,
         receiverId: selectedReceiverId,
         amount,
         description,
@@ -251,8 +268,8 @@ const CreatePaymentPage = () => {
     }
   };
   
-  // Get list of people user can pay
-  const getPossibleReceivers = () => {
+  // Get all members of the group
+  const getGroupMembers = () => {
     if (!selectedGroup) {
       console.log('No selected group');
       return [];
@@ -267,19 +284,33 @@ const CreatePaymentPage = () => {
     }
     
     console.log('Group members array:', membersArray);
+    return membersArray;
+  };
+  
+  // Get list of people user can pay
+  const getPossibleReceivers = () => {
+    const members = getGroupMembers();
     
-    // Filter out current user
-    const receivers = membersArray.filter(member => member.userId !== user?.id);
+    // Filter out selected payer (we can't pay to the same person)
+    const receivers = selectedPayerId 
+      ? members.filter(member => member.userId !== selectedPayerId)
+      : members;
+      
     console.log('Filtered receivers:', receivers);
     return receivers;
   };
   
-  // Get user-specific suggestions
-  const getUserSuggestions = () => {
+  // Get list of possible payers
+  const getPossiblePayers = () => {
+    return getGroupMembers();
+  };
+  
+  // Get all suggestions for the group - no longer filtering by current user
+  const getGroupSuggestions = () => {
     if (!suggestions || !Array.isArray(suggestions)) {
       return [];
     }
-    return suggestions.filter(suggestion => suggestion.from.id === user?.id);
+    return suggestions;
   };
   
   if (loadingGroups) {
@@ -326,6 +357,36 @@ const CreatePaymentPage = () => {
               {selectedGroup && (
                 <>
                   <Grid item xs={12}>
+                    <FormControl fullWidth error={!!errors.payer}>
+                      <InputLabel id="payer-label">Paid By</InputLabel>
+                      <Select
+                        labelId="payer-label"
+                        id="payer"
+                        value={selectedPayerId || ''}
+                        label="Paid By"
+                        onChange={(e) => {
+                          const newPayerId = e.target.value as number;
+                          setSelectedPayerId(newPayerId);
+                          
+                          // If the current receiver is the same as the new payer, reset the receiver
+                          if (newPayerId === selectedReceiverId) {
+                            setSelectedReceiverId(null);
+                          }
+                        }}
+                        disabled={loadingBalances}
+                      >
+                        {getPossiblePayers().map((member) => (
+                          <MenuItem key={member.userId} value={member.userId}>
+                            {member.user.firstName} {member.user.lastName}
+                            {member.userId === user?.id ? ' (You)' : ''}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {errors.payer && <FormHelperText>{errors.payer}</FormHelperText>}
+                    </FormControl>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
                     <FormControl fullWidth error={!!errors.receiver}>
                       <InputLabel id="receiver-label">Pay To</InputLabel>
                       <Select
@@ -339,12 +400,21 @@ const CreatePaymentPage = () => {
                         {getPossibleReceivers().map((member) => (
                           <MenuItem key={member.userId} value={member.userId}>
                             {member.user.firstName} {member.user.lastName}
+                            {member.userId === user?.id ? ' (You)' : ''}
                           </MenuItem>
                         ))}
                       </Select>
                       {errors.receiver && <FormHelperText>{errors.receiver}</FormHelperText>}
                     </FormControl>
                   </Grid>
+                  
+                  {errors.same && (
+                    <Grid item xs={12}>
+                      <Alert severity="error" sx={{ mb: 2 }}>
+                        {errors.same}
+                      </Alert>
+                    </Grid>
+                  )}
                   
                   <Grid item xs={12}>
                     <TextField
@@ -401,9 +471,9 @@ const CreatePaymentPage = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
                   <CircularProgress size={24} />
                 </Box>
-              ) : getUserSuggestions().length > 0 ? (
+              ) : getGroupSuggestions().length > 0 ? (
                 <Grid container spacing={2}>
-                  {getUserSuggestions().map((suggestion, index) => (
+                  {getGroupSuggestions().map((suggestion, index) => (
                     <Grid item xs={12} key={index}>
                       <Alert 
                         severity="info"
@@ -415,7 +485,7 @@ const CreatePaymentPage = () => {
                       >
                         <Box>
                           <Typography variant="body2">
-                            Suggestion: Pay {selectedGroup.currency} {suggestion.amount.toFixed(2)} to {suggestion.to.name}
+                            Suggestion: {suggestion.from.name}{suggestion.from.id === user?.id ? ' (You)' : ''} pays {selectedGroup.currency} {suggestion.amount.toFixed(2)} to {suggestion.to.name}{suggestion.to.id === user?.id ? ' (You)' : ''}
                           </Typography>
                         </Box>
                         <Button 
@@ -431,15 +501,20 @@ const CreatePaymentPage = () => {
                 </Grid>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  No payment suggestions available for you at this time.
+                  No payment suggestions available for this group at this time.
                 </Typography>
               )}
               
-              {selectedReceiverId && amount && (
+              {selectedPayerId && selectedReceiverId && amount && (
                 <Box sx={{ mt: 2 }}>
                   <Alert severity="success">
                     <Typography variant="body2">
-                      You're about to pay {selectedGroup.currency} {(amount as number).toFixed(2)} to {
+                      {selectedPayerId === user?.id ? "You're" : (
+                        <>
+                          {getGroupMembers().find(m => m.userId === selectedPayerId)?.user?.firstName || ''} {
+                          getGroupMembers().find(m => m.userId === selectedPayerId)?.user?.lastName || ''} is
+                        </>
+                      )} about to pay {selectedGroup.currency} {(amount as number).toFixed(2)} to {
                         getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.user?.firstName || ''
                       } {
                         getPossibleReceivers().find(m => m.userId === selectedReceiverId)?.user?.lastName || ''

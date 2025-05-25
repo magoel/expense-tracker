@@ -10,6 +10,7 @@ export const paymentRouter = express.Router();
 const createPaymentSchema = joi.object({
   groupId: joi.number().required(),
   receiverId: joi.number().required(),
+  payerId: joi.number().optional(),  // Add payerId as an optional field
   amount: joi.number().positive().required(),
   description: joi.string().allow('').optional(),
   date: joi.date().required(),

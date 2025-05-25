@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Payment, User, ExpenseShare, Group } from '../models';
+import { Payment, User, ExpenseShare, Group, GroupMember } from '../models';
 import { asyncHandler } from '../middleware/errorHandler';
 import { logger } from '../config/logger';
 import { sequelize } from '../config/database';
@@ -19,7 +19,49 @@ export const paymentController = {
   // Record a new payment
   createPayment: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const { groupId, receiverId, amount, description, date, expenseShareIds = [] } = req.body;
+    const { groupId, receiverId, payerId, amount, description, date, expenseShareIds = [] } = req.body;
+    
+    // Verify the user is a member of the group
+    const userMembership = await Group.findOne({
+      where: { id: groupId },
+      include: [
+        {
+          model: GroupMember,
+          as: 'memberships',
+          where: { userId },
+          required: true
+        }
+      ]
+    });
+    
+    if (!userMembership) {
+      const error: any = new Error('You are not a member of this group');
+      error.status = 403;
+      throw error;
+    }
+    
+    // Check if the payerId is provided, if not, use the current user ID
+    const actualPayerId = payerId || userId;
+    
+    // Verify payer and receiver are members of the group
+    const groupMembers = await GroupMember.findAll({
+      where: { 
+        groupId,
+        userId: {
+          [Op.in]: [actualPayerId, receiverId]
+        }
+      }
+    });
+    
+    // Check if both users are members of the group
+    const payerIsMember = groupMembers.some((m: any) => m.userId === actualPayerId);
+    const receiverIsMember = groupMembers.some((m: any) => m.userId === receiverId);
+    
+    if (!payerIsMember || !receiverIsMember) {
+      const error: any = new Error('Both payer and receiver must be members of the group');
+      error.status = 400;
+      throw error;
+    }
     
     // Start a transaction
     const t = await sequelize.transaction();
@@ -29,7 +71,7 @@ export const paymentController = {
       const payment = await Payment.create(
         {
           groupId,
-          payerId: userId,
+          payerId: actualPayerId,
           receiverId,
           amount,
           description,
