@@ -185,8 +185,8 @@ export const statsController = {
       const received = paymentsReceived.find(payment => payment.receiverId === userId);
       const receivedAmount = parseFloat((received as any)?.receivedAmount || 0);
       
-      // Calculate balance: (paid + received) - (owed + sent)
-      const balance = (paidAmount + receivedAmount) - (owedAmount + sentAmount);
+      // Calculate balance: (paid + sent) - (received + owed)
+      const balance = (paidAmount + sentAmount) - (receivedAmount + owedAmount);
       
       return {
         ...user,
@@ -403,13 +403,13 @@ export const statsController = {
           paymentsReceived = { receivedAmount: 0 };
         }
         
-        // Calculate balance: (paid + received) - (owed + sent)
+        // Calculate balance: (paid + sent) - (received + owed)
         const paidAmount = parseFloat((paidExpenses as any)?.paidAmount || 0);
         const owedAmount = parseFloat((owedShares as any)?.owedAmount || 0);
         const sentAmount = parseFloat((paymentsSent as any)?.sentAmount || 0);
         const receivedAmount = parseFloat((paymentsReceived as any)?.receivedAmount || 0);
         
-        const balance = (paidAmount + receivedAmount) - (owedAmount + sentAmount);
+        const balance = (paidAmount + sentAmount) - (receivedAmount + owedAmount);
         
         return {
           groupId: group.id,
@@ -561,8 +561,8 @@ async function getBalances(groupId: string | number) {
     const received = paymentsReceived.find(payment => payment.receiverId === userId);
     const receivedAmount = parseFloat((received as any)?.receivedAmount || 0);
     
-    // Calculate balance: (paid + received) - (owed + sent)
-    const balance = (paidAmount + receivedAmount) - (owedAmount + sentAmount);
+    // Calculate balance: (paid + sent) - (received + owed)
+    const balance = (paidAmount + sentAmount) - (receivedAmount + owedAmount);
     
     return {
       ...user,
