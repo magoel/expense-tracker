@@ -17,6 +17,12 @@ const createPaymentSchema = joi.object({
   expenseShareIds: joi.array().items(joi.number()).optional(),
 });
 
+const updatePaymentSchema = joi.object({
+  amount: joi.number().positive(),
+  description: joi.string().allow('').optional(),
+  date: joi.date(),
+});
+
 // All payment routes require authentication
 paymentRouter.use(authMiddleware.jwt);
 
@@ -32,6 +38,9 @@ paymentRouter.get('/group/:groupId/user', isGroupMember, paymentController.getUs
 
 // Get recent payments for user across all groups
 paymentRouter.get('/recent', paymentController.getRecentUserPayments);
+
+// Update a payment
+paymentRouter.put('/:paymentId', validateRequestBody(updatePaymentSchema), paymentController.updatePayment);
 
 // Delete a payment
 paymentRouter.delete('/:paymentId', paymentController.deletePayment);

@@ -229,11 +229,30 @@ export const expenseController = {
       throw error;
     }
     
-    // Check if the current user created this expense
-    if (expense.paidById !== userId) {
+    // Check if the current user is a member of the group
+    const isMember = await GroupMember.findOne({
+      where: {
+        groupId: expense.groupId,
+        userId
+      }
+    });
+    
+    if (!isMember) {
       const error: any = new Error('Not authorized to update this expense');
       error.status = 403;
       throw error;
+    }
+    
+    // If not the original creator, check if within 7 days
+    if (expense.paidById !== userId) {
+      // Calculate the difference in days between current date and expense creation date
+      const daysDifference = Math.floor((Date.now() - expense.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDifference > 7) {
+        const error: any = new Error('Expenses can only be edited within 7 days of creation');
+        error.status = 403;
+        throw error;
+      }
     }
     
     // Update fields
@@ -241,6 +260,8 @@ export const expenseController = {
     if (date) expense.date = new Date(date);
     
     await expense.save();
+    
+    logger.info(`Expense #${expenseId} updated by user #${userId} (${expense.paidById === userId ? 'creator' : 'group member'})`);
     
     res.status(200).json({
       success: true,
@@ -264,11 +285,30 @@ export const expenseController = {
       throw error;
     }
     
-    // Check if the current user created this expense
-    if (expense.paidById !== userId) {
+    // Check if the current user is a member of the group
+    const isMember = await GroupMember.findOne({
+      where: {
+        groupId: expense.groupId,
+        userId
+      }
+    });
+    
+    if (!isMember) {
       const error: any = new Error('Not authorized to delete this expense');
       error.status = 403;
       throw error;
+    }
+    
+    // If not the original creator, check if within 7 days
+    if (expense.paidById !== userId) {
+      // Calculate the difference in days between current date and expense creation date
+      const daysDifference = Math.floor((Date.now() - expense.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDifference > 7) {
+        const error: any = new Error('Expenses can only be deleted within 7 days of creation');
+        error.status = 403;
+        throw error;
+      }
     }
     
     // Start a transaction
@@ -286,7 +326,7 @@ export const expenseController = {
       
       await t.commit();
       
-      logger.info(`Expense #${expenseId} deleted by user #${userId}`);
+      logger.info(`Expense #${expenseId} deleted by user #${userId} (${expense.paidById === userId ? 'creator' : 'group member'})`);
       
       res.status(200).json({
         success: true,

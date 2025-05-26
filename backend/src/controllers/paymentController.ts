@@ -180,6 +180,64 @@ export const paymentController = {
     });
   }),
   
+  // Update a payment
+  updatePayment: asyncHandler(async (req: Request, res: Response) => {
+    const { paymentId } = req.params;
+    const userId = getUserId(req);
+    const { amount, description, date } = req.body;
+    
+    // Find payment
+    const payment = await Payment.findByPk(paymentId);
+    
+    if (!payment) {
+      const error: any = new Error('Payment not found');
+      error.status = 404;
+      throw error;
+    }
+    
+    // Check if the current user is a member of the group
+    const isMember = await GroupMember.findOne({
+      where: {
+        groupId: payment.groupId,
+        userId
+      }
+    });
+    
+    if (!isMember) {
+      const error: any = new Error('Not authorized to update this payment');
+      error.status = 403;
+      throw error;
+    }
+    
+    // If not the original payer, check if within 7 days
+    if (payment.payerId !== userId) {
+      // Calculate the difference in days between current date and payment creation date
+      const daysDifference = Math.floor((Date.now() - payment.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDifference > 7) {
+        const error: any = new Error('Payments can only be edited within 7 days of creation');
+        error.status = 403;
+        throw error;
+      }
+    }
+    
+    // Update fields
+    if (amount !== undefined) payment.amount = amount;
+    if (description !== undefined) payment.description = description;
+    if (date) payment.date = new Date(date);
+    
+    await payment.save();
+    
+    logger.info(`Payment #${paymentId} updated by user #${userId} (${payment.payerId === userId ? 'creator' : 'group member'})`);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        payment,
+      },
+    });
+  }),
+  
   // Delete a payment
   deletePayment: asyncHandler(async (req: Request, res: Response) => {
     const { paymentId } = req.params;
@@ -194,17 +252,36 @@ export const paymentController = {
       throw error;
     }
     
-    // Check if the current user created this payment
-    if (payment.payerId !== userId) {
+    // Check if the current user is a member of the group
+    const isMember = await GroupMember.findOne({
+      where: {
+        groupId: payment.groupId,
+        userId
+      }
+    });
+    
+    if (!isMember) {
       const error: any = new Error('Not authorized to delete this payment');
       error.status = 403;
       throw error;
     }
     
+    // If not the original payer, check if within 7 days
+    if (payment.payerId !== userId) {
+      // Calculate the difference in days between current date and payment creation date
+      const daysDifference = Math.floor((Date.now() - payment.createdAt.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDifference > 7) {
+        const error: any = new Error('Payments can only be deleted within 7 days of creation');
+        error.status = 403;
+        throw error;
+      }
+    }
+    
     // Delete the payment
     await payment.destroy();
     
-    logger.info(`Payment #${paymentId} deleted by user #${userId}`);
+    logger.info(`Payment #${paymentId} deleted by user #${userId} (${payment.payerId === userId ? 'creator' : 'group member'})`);
     
     res.status(200).json({
       success: true,
