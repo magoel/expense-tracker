@@ -67,8 +67,6 @@ const MainLayout = () => {
   const navItems = [
     { text: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
     { text: 'Groups', path: '/groups', icon: <GroupIcon /> },
-    { text: 'Expenses', path: '/expenses', icon: <ReceiptIcon /> },
-    { text: 'Payments', path: '/payments', icon: <PaymentIcon /> },
     { text: 'Statistics', path: '/statistics', icon: <ChartIcon /> },
   ];
 

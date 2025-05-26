@@ -14,10 +14,7 @@ import DashboardPage from './pages/DashboardPage';
 import GroupsPage from './pages/groups/GroupsPage';
 import GroupDetailPage from './pages/groups/GroupDetailPage';
 import CreateGroupPage from './pages/groups/CreateGroupPage';
-import ExpensesPage from './pages/expenses/ExpensesPage';
 import CreateExpensePage from './pages/expenses/CreateExpensePage';
-import PaymentsPage from './pages/payments/PaymentsPage';
-import CreatePaymentPage from './pages/payments/CreatePaymentPage';
 import StatisticsPage from './pages/statistics/StatisticsPage';
 import ProfilePage from './pages/profile/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -74,11 +71,7 @@ function App() {
           <Route path="/groups/new" element={<CreateGroupPage />} />
           <Route path="/groups/:groupId" element={<GroupDetailPage />} />
           
-          <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/expenses/new" element={<CreateExpensePage />} />
-          
-          <Route path="/payments" element={<PaymentsPage />} />
-          <Route path="/payments/new" element={<CreatePaymentPage />} />
           
           <Route path="/statistics" element={<StatisticsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
