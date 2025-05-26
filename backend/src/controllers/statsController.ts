@@ -80,11 +80,19 @@ export const statsController = {
     }
     
     // Use a simplified approach for the GROUP BY clause that matches the selected columns
+    // Create group array dynamically to avoid empty identifiers
+    let groupArray = ['period', 'year', 'date'];
+    if (timeFrame === 'monthly') {
+      groupArray.push('month');
+    } else if (timeFrame === 'weekly') {
+      groupArray.push('week');
+    }
+
     const expenses = await Expense.findAll({
       attributes: expenseAttributes,
       where: { groupId },
       // Use the aliases from the attribute list to create a simpler GROUP BY clause
-      group: ['period', 'year', timeFrame === 'monthly' ? 'month' : timeFrame === 'weekly' ? 'week' : '', 'date'],
+      group: groupArray,
       order: order.map(field => [field, 'ASC']),
       raw: true,
     });
