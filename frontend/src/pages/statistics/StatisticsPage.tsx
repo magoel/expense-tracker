@@ -36,7 +36,8 @@ import {
   Title,
   Tooltip,
   Legend,
-  ArcElement
+  ArcElement,
+  Filler
 } from 'chart.js';
 import { Line, Bar, Pie } from 'react-chartjs-2';
 
@@ -50,7 +51,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  ArcElement
+  ArcElement,
+  Filler
 );
 
 interface Group {
@@ -326,7 +328,7 @@ const StatisticsPage = () => {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={6} key="group-selector">
               <FormControl fullWidth>
                 <InputLabel id="group-label">Group</InputLabel>
                 <Select
@@ -343,7 +345,7 @@ const StatisticsPage = () => {
               </FormControl>
             </Grid>
             
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} sm={6} key="time-frame-selector">
               <FormControl fullWidth>
                 <InputLabel id="time-frame-label">Time Frame</InputLabel>
                 <Select
@@ -353,10 +355,10 @@ const StatisticsPage = () => {
                   label="Time Frame"
                   onChange={handleTimeFrameChange}
                 >
-                  <MenuItem value="daily">Daily</MenuItem>
-                  <MenuItem value="weekly">Weekly</MenuItem>
-                  <MenuItem value="monthly">Monthly</MenuItem>
-                  <MenuItem value="yearly">Yearly</MenuItem>
+                  <MenuItem value="daily" key="daily">Daily</MenuItem>
+                  <MenuItem value="weekly" key="weekly">Weekly</MenuItem>
+                  <MenuItem value="monthly" key="monthly">Monthly</MenuItem>
+                  <MenuItem value="yearly" key="yearly">Yearly</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -372,9 +374,9 @@ const StatisticsPage = () => {
       
       <Box sx={{ mb: 2 }}>
         <Tabs value={activeTab} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
-          <Tab label="Expenses Over Time" />
-          <Tab label="Expenses By Payer" />
-          <Tab label="Balances" />
+          <Tab label="Expenses Over Time" key="expenses-over-time" />
+          <Tab label="Expenses By Payer" key="expenses-by-payer" />
+          <Tab label="Balances" key="balances" />
         </Tabs>
       </Box>
       
@@ -431,7 +433,7 @@ const StatisticsPage = () => {
               <CardContent>
                 <Box sx={{ height: 400 }}>
                   <Grid container>
-                    <Grid item xs={12} md={8}>
+                    <Grid item xs={12} md={8} key="bar-chart">
                       <Bar 
                         data={getByPayerChartData()} 
                         options={{
@@ -448,7 +450,7 @@ const StatisticsPage = () => {
                         }}
                       />
                     </Grid>
-                    <Grid item xs={12} md={4}>
+                    <Grid item xs={12} md={4} key="pie-chart">
                       <Pie 
                         data={getByPayerChartData()} 
                         options={{
