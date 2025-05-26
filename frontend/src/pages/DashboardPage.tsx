@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Box,
   Grid,
@@ -21,7 +21,9 @@ import {
   InputAdornment,
   Tab,
   Tabs,
-  Chip
+  Chip,
+  Collapse,
+  IconButton
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -30,7 +32,12 @@ import {
   ArrowForward as ArrowForwardIcon,
   Search as SearchIcon,
   Payments as PaymentsIcon,
-  AccountBalance as AccountBalanceIcon
+  AccountBalance as AccountBalanceIcon,
+  ExpandMore,
+  ExpandLess,
+  Edit,
+  Delete,
+  AccessTime
 } from '@mui/icons-material';
 
 import { api } from '../api';
@@ -98,6 +105,7 @@ interface ActivityItem {
   amount: number | string;
   description: string;
   data: Expense | Payment;
+  isExpanded?: boolean;
 }
 
 interface Balance {
@@ -115,6 +123,7 @@ interface PaginationMeta {
 }
 
 const DashboardPage = () => {
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<Group[]>([]);
   const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
   const [allActivityItems, setAllActivityItems] = useState<ActivityItem[]>([]); // For search filtering
@@ -201,7 +210,8 @@ const DashboardPage = () => {
           date: expense.date,
           amount: expense.amount,
           description: expense.description,
-          data: expense
+          data: expense,
+          isExpanded: false
         }));
         
         // Fetch payments
@@ -218,7 +228,8 @@ const DashboardPage = () => {
           date: payment.date,
           amount: payment.amount,
           description: payment.description || 'Payment',
-          data: payment
+          data: payment,
+          isExpanded: false
         }));
         
         // Combine and sort by date (newest first)
@@ -355,6 +366,17 @@ const DashboardPage = () => {
       setHasMoreItems(filteredItems.length >= pageSize);
     }
   };
+  
+  // Handle expanding/collapsing a transaction
+  const handleToggleExpand = (itemId: number) => {
+    setActivityItems(prevItems => 
+      prevItems.map(item => 
+        item.id === itemId
+          ? { ...item, isExpanded: !item.isExpanded }
+          : item
+      )
+    );
+  };
 
   // Function to load more activity items
   const loadMoreActivities = useCallback(async () => {
@@ -381,7 +403,8 @@ const DashboardPage = () => {
           date: expense.date,
           amount: expense.amount,
           description: expense.description,
-          data: expense
+          data: expense,
+          isExpanded: false
         }));
         
         // Fetch payments
@@ -398,7 +421,8 @@ const DashboardPage = () => {
           date: payment.date,
           amount: payment.amount,
           description: payment.description || 'Payment',
-          data: payment
+          data: payment,
+          isExpanded: false
         }));
         
         // Combine and sort by date (newest first)
@@ -655,46 +679,125 @@ const DashboardPage = () => {
                           return (
                             <ListItem
                               key={`expense-${item.id}`}
-                              button
-                              component={RouterLink}
-                              to={`/expenses/${item.id}`}
                               divider
+                              sx={{ 
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                py: 1
+                              }}
                             >
-                              <Avatar sx={{ mr: 2, bgcolor: 'secondary.main' }}>
-                                <ReceiptIcon />
-                              </Avatar>
-                              <ListItemText 
-                                primary={
+                              <Box sx={{ width: '100%' }}>
+                                <Box 
+                                  sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center',
+                                    width: '100%',
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => handleToggleExpand(item.id)}
+                                >
+                                  <Avatar sx={{ mr: 2, bgcolor: 'secondary.main' }}>
+                                    <ReceiptIcon />
+                                  </Avatar>
+                                  <ListItemText 
+                                    primary={
+                                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <Typography variant="body1">{expense.description}</Typography>
+                                        {expense.group && (
+                                          <Chip 
+                                            label={expense.group.name} 
+                                            size="small" 
+                                            variant="outlined" 
+                                            sx={{ ml: 1 }}
+                                          />
+                                        )}
+                                      </Box>
+                                    }
+                                    secondaryTypographyProps={{ component: 'div' }}
+                                    secondary={
+                                      <>
+                                        <Typography variant="body2" component="span">
+                                          Paid by {expense.paidBy.firstName} {expense.paidBy.lastName}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" component="div">
+                                          {format(new Date(expense.date), 'MMM d, yyyy')}
+                                        </Typography>
+                                      </>
+                                    }
+                                  />
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Typography variant="body1">{expense.description}</Typography>
-                                    {expense.group && (
-                                      <Chip 
-                                        label={expense.group.name} 
-                                        size="small" 
-                                        variant="outlined" 
-                                        sx={{ ml: 1 }}
-                                      />
-                                    )}
+                                    <Typography 
+                                      variant="body1"
+                                      fontWeight="bold"
+                                      sx={{ mr: 1 }}
+                                    >
+                                      {formatCurrency(parseFloat(expense.amount.toString()), expense.group?.currency || 'USD')}
+                                    </Typography>
+                                    <IconButton onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleExpand(item.id);
+                                    }}>
+                                      {item.isExpanded ? <ExpandLess /> : <ExpandMore />}
+                                    </IconButton>
                                   </Box>
-                                }
-                                secondaryTypographyProps={{ component: 'div' }}
-                                secondary={
-                                  <>
-                                    <Typography variant="body2" component="span">
-                                      Paid by {expense.paidBy.firstName} {expense.paidBy.lastName}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary" component="div">
-                                      {format(new Date(expense.date), 'MMM d, yyyy')}
-                                    </Typography>
-                                  </>
-                                }
-                              />
-                              <Typography 
-                                variant="body1"
-                                fontWeight="bold"
-                              >
-                                {formatCurrency(parseFloat(expense.amount.toString()), expense.group?.currency || 'USD')}
-                              </Typography>
+                                </Box>
+                                
+                                {/* Collapsible detail panel */}
+                                <Collapse in={item.isExpanded} timeout="auto" unmountOnExit>
+                                  <Box sx={{ pl: 9, pr: 2, pb: 2, pt: 1 }}>
+                                    <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                                      <Grid container spacing={2}>
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Amount
+                                          </Typography>
+                                          <Typography variant="body1" fontWeight="medium">
+                                            {expense.group?.currency || 'USD'} {parseFloat(expense.amount.toString()).toFixed(2)}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Paid By
+                                          </Typography>
+                                          <Typography variant="body1">
+                                            {expense.paidBy.firstName} {expense.paidBy.lastName}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Date
+                                          </Typography>
+                                          <Typography variant="body1">
+                                            {format(new Date(expense.date), 'MMMM d, yyyy')}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Created At
+                                          </Typography>
+                                          <Typography variant="body1">
+                                            {format(new Date(expense.createdAt), 'MMMM d, yyyy')}
+                                          </Typography>
+                                        </Grid>
+                                      </Grid>
+                                      
+                                      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                                        <Button 
+                                          size="small" 
+                                          variant="outlined" 
+                                          startIcon={<Edit />}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/expenses/${expense.id}`);
+                                          }}
+                                        >
+                                          Edit
+                                        </Button>
+                                      </Box>
+                                    </Paper>
+                                  </Box>
+                                </Collapse>
+                              </Box>
                             </ListItem>
                           );
                         } else {
@@ -703,41 +806,131 @@ const DashboardPage = () => {
                             <ListItem
                               key={`payment-${item.id}`}
                               divider
+                              sx={{ 
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                py: 1
+                              }}
                             >
-                              <Avatar sx={{ mr: 2, bgcolor: 'success.main' }}>
-                                <AccountBalanceIcon />
-                              </Avatar>
-                              <ListItemText 
-                                primary={
+                              <Box sx={{ width: '100%' }}>
+                                <Box 
+                                  sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center',
+                                    width: '100%',
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => handleToggleExpand(item.id)}
+                                >
+                                  <Avatar sx={{ mr: 2, bgcolor: 'success.main' }}>
+                                    <AccountBalanceIcon />
+                                  </Avatar>
+                                  <ListItemText 
+                                    primary={
+                                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <Typography variant="body1">{payment.description || 'Payment'}</Typography>
+                                        <Chip 
+                                          label={payment.group.name} 
+                                          size="small" 
+                                          variant="outlined" 
+                                          sx={{ ml: 1 }}
+                                        />
+                                      </Box>
+                                    }
+                                    secondaryTypographyProps={{ component: 'div' }}
+                                    secondary={
+                                      <>
+                                        <Typography variant="body2" component="span">
+                                          {payment.payer.firstName} {payment.payer.lastName} → {payment.receiver.firstName} {payment.receiver.lastName}
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" component="div">
+                                          {format(new Date(payment.date), 'MMM d, yyyy')}
+                                        </Typography>
+                                      </>
+                                    }
+                                  />
                                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Typography variant="body1">{payment.description || 'Payment'}</Typography>
-                                    <Chip 
-                                      label={payment.group.name} 
-                                      size="small" 
-                                      variant="outlined" 
-                                      sx={{ ml: 1 }}
-                                    />
+                                    <Typography 
+                                      variant="body1"
+                                      fontWeight="bold"
+                                      color="success.main"
+                                      sx={{ mr: 1 }}
+                                    >
+                                      {formatCurrency(parseFloat(payment.amount.toString()), payment.group.currency)}
+                                    </Typography>
+                                    <IconButton onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleExpand(item.id);
+                                    }}>
+                                      {item.isExpanded ? <ExpandLess /> : <ExpandMore />}
+                                    </IconButton>
                                   </Box>
-                                }
-                                secondaryTypographyProps={{ component: 'div' }}
-                                secondary={
-                                  <>
-                                    <Typography variant="body2" component="span">
-                                      {payment.payer.firstName} {payment.payer.lastName} → {payment.receiver.firstName} {payment.receiver.lastName}
-                                    </Typography>
-                                    <Typography variant="body2" color="text.secondary" component="div">
-                                      {format(new Date(payment.date), 'MMM d, yyyy')}
-                                    </Typography>
-                                  </>
-                                }
-                              />
-                              <Typography 
-                                variant="body1"
-                                fontWeight="bold"
-                                color="success.main"
-                              >
-                                {formatCurrency(parseFloat(payment.amount.toString()), payment.group.currency)}
-                              </Typography>
+                                </Box>
+                                
+                                {/* Collapsible detail panel */}
+                                <Collapse in={item.isExpanded} timeout="auto" unmountOnExit>
+                                  <Box sx={{ pl: 9, pr: 2, pb: 2, pt: 1 }}>
+                                    <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                                      <Grid container spacing={2}>
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Amount
+                                          </Typography>
+                                          <Typography variant="body1" fontWeight="medium">
+                                            {payment.group.currency} {parseFloat(payment.amount.toString()).toFixed(2)}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Payer
+                                          </Typography>
+                                          <Typography variant="body1">
+                                            {payment.payer.firstName} {payment.payer.lastName}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Receiver
+                                          </Typography>
+                                          <Typography variant="body1">
+                                            {payment.receiver.firstName} {payment.receiver.lastName}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Date
+                                          </Typography>
+                                          <Typography variant="body1">
+                                            {format(new Date(payment.date), 'MMMM d, yyyy')}
+                                          </Typography>
+                                        </Grid>
+                                        <Grid item xs={12}>
+                                          <Typography variant="subtitle2" color="text.secondary">
+                                            Created At
+                                          </Typography>
+                                          <Typography variant="body1">
+                                            {format(new Date(payment.createdAt), 'MMMM d, yyyy')}
+                                          </Typography>
+                                        </Grid>
+                                      </Grid>
+                                      
+                                      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                                        <Button 
+                                          size="small" 
+                                          variant="outlined" 
+                                          startIcon={<Edit />}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/payments/${payment.id}`);
+                                          }}
+                                        >
+                                          Edit
+                                        </Button>
+                                      </Box>
+                                    </Paper>
+                                  </Box>
+                                </Collapse>
+                              </Box>
                             </ListItem>
                           );
                         }

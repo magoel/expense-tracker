@@ -25,7 +25,9 @@ import {
   FormControl,
   Select,
   MenuItem,
-  SelectChangeEvent
+  SelectChangeEvent,
+  Collapse,
+  IconButton
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -37,7 +39,12 @@ import {
   AccountBalance,
   Person,
   Search,
-  FilterList
+  FilterList,
+  ExpandMore,
+  ExpandLess,
+  Edit,
+  Delete,
+  AccessTime
 } from '@mui/icons-material';
 import { api } from '../../api';
 import { format } from 'date-fns';
@@ -118,6 +125,7 @@ interface ActivityItem {
   amount: number | string; // API might return as string or number
   description: string;
   data: Expense | Payment;
+  isExpanded?: boolean; // Track expanded state for each item
 }
 
 interface PendingMembership {
@@ -329,6 +337,17 @@ const GroupDetailPage: React.FC = () => {
     
     setIsLoadingMore(false);
   }, [page, hasMoreItems, isLoadingMore, allActivityItems]);
+  
+  // Handle expanding/collapsing a transaction
+  const handleToggleExpand = (itemId: number) => {
+    setActivityItems(prevItems => 
+      prevItems.map(item => 
+        item.id === itemId
+          ? { ...item, isExpanded: !item.isExpanded }
+          : item
+      )
+    );
+  };
 
   // Apply search filters and pagination with support for infinite scrolling
   const applyFiltersAndPagination = (items = allActivityItems, currentPage = page, appendItems = false) => {
@@ -545,68 +564,214 @@ const GroupDetailPage: React.FC = () => {
   };
   
   // Render expense item
-  const renderExpenseItem = (expense: Expense) => {
+  const renderExpenseItem = (expense: Expense, item: ActivityItem) => {
     return (
-      <>
-        <ListItemAvatar>
-          <Avatar sx={{ bgcolor: 'primary.main' }}>
-            <Receipt />
-          </Avatar>
-        </ListItemAvatar>
-        <ListItemText
-          primary={
-            <Typography variant="body1">
-              {expense.description}
-            </Typography>
-          }
-          secondary={
-            <>
-              <Typography component="span" variant="body2" color="text.primary">
-                {formatUserName(expense.paidBy)} paid {group.currency} {parseFloat(expense.amount.toString()).toFixed(2)}
-              </Typography>
-              <Typography component="span" variant="body2" display="block" color="text.secondary">
-                {formatDate(expense.date)}
-              </Typography>
-            </>
-          }
-        />
-        <Button 
-          size="small" 
-          onClick={() => navigate(`/expenses/${expense.id}`)}
+      <Box sx={{ width: '100%' }}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            width: '100%',
+            cursor: 'pointer'
+          }}
+          onClick={() => handleToggleExpand(item.id)}
         >
-          Details
-        </Button>
-      </>
+          <ListItemAvatar>
+            <Avatar sx={{ bgcolor: 'primary.main' }}>
+              <Receipt />
+            </Avatar>
+          </ListItemAvatar>
+          <ListItemText
+            primary={
+              <Typography variant="body1">
+                {expense.description}
+              </Typography>
+            }
+            secondary={
+              <>
+                <Typography component="span" variant="body2" color="text.primary">
+                  {formatUserName(expense.paidBy)} paid {group.currency} {parseFloat(expense.amount.toString()).toFixed(2)}
+                </Typography>
+                <Typography component="span" variant="body2" display="block" color="text.secondary">
+                  {formatDate(expense.date)}
+                </Typography>
+              </>
+            }
+          />
+          <IconButton edge="end" onClick={(e) => {
+            e.stopPropagation();
+            handleToggleExpand(item.id);
+          }}>
+            {item.isExpanded ? <ExpandLess /> : <ExpandMore />}
+          </IconButton>
+        </Box>
+        
+        {/* Collapsible detail panel */}
+        <Collapse in={item.isExpanded} timeout="auto" unmountOnExit>
+          <Box sx={{ pl: 9, pr: 2, pb: 2, pt: 1 }}>
+            <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Amount
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {group.currency} {parseFloat(expense.amount.toString()).toFixed(2)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Paid By
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatUserName(expense.paidBy)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Date
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatDate(expense.date)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Created At
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatDate(expense.createdAt)}
+                  </Typography>
+                </Grid>
+              </Grid>
+              
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  startIcon={<Edit />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/expenses/${expense.id}`);
+                  }}
+                >
+                  Edit
+                </Button>
+              </Box>
+            </Paper>
+          </Box>
+        </Collapse>
+      </Box>
     );
   };
   
   // Render payment item
-  const renderPaymentItem = (payment: Payment) => {
+  const renderPaymentItem = (payment: Payment, item: ActivityItem) => {
     return (
-      <>
-        <ListItemAvatar>
-          <Avatar sx={{ bgcolor: 'success.main' }}>
-            <AccountBalance />
-          </Avatar>
-        </ListItemAvatar>
-        <ListItemText
-          primary={
-            <Typography variant="body1">
-              {payment.description || 'Payment'}
-            </Typography>
-          }
-          secondary={
-            <>
-              <Typography component="span" variant="body2" color="text.primary">
-                {formatUserName(payment.payer)} paid {formatUserName(payment.receiver)} {group.currency} {parseFloat(payment.amount.toString()).toFixed(2)}
+      <Box sx={{ width: '100%' }}>
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            width: '100%',
+            cursor: 'pointer'
+          }}
+          onClick={() => handleToggleExpand(item.id)}
+        >
+          <ListItemAvatar>
+            <Avatar sx={{ bgcolor: 'success.main' }}>
+              <AccountBalance />
+            </Avatar>
+          </ListItemAvatar>
+          <ListItemText
+            primary={
+              <Typography variant="body1">
+                {payment.description || 'Payment'}
               </Typography>
-              <Typography component="span" variant="body2" display="block" color="text.secondary">
-                {formatDate(payment.date)}
-              </Typography>
-            </>
-          }
-        />
-      </>
+            }
+            secondary={
+              <>
+                <Typography component="span" variant="body2" color="text.primary">
+                  {formatUserName(payment.payer)} paid {formatUserName(payment.receiver)} {group.currency} {parseFloat(payment.amount.toString()).toFixed(2)}
+                </Typography>
+                <Typography component="span" variant="body2" display="block" color="text.secondary">
+                  {formatDate(payment.date)}
+                </Typography>
+              </>
+            }
+          />
+          <IconButton edge="end" onClick={(e) => {
+            e.stopPropagation();
+            handleToggleExpand(item.id);
+          }}>
+            {item.isExpanded ? <ExpandLess /> : <ExpandMore />}
+          </IconButton>
+        </Box>
+        
+        {/* Collapsible detail panel */}
+        <Collapse in={item.isExpanded} timeout="auto" unmountOnExit>
+          <Box sx={{ pl: 9, pr: 2, pb: 2, pt: 1 }}>
+            <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Amount
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {group.currency} {parseFloat(payment.amount.toString()).toFixed(2)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Payer
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatUserName(payment.payer)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Receiver
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatUserName(payment.receiver)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Date
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatDate(payment.date)}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Created At
+                  </Typography>
+                  <Typography variant="body1">
+                    {formatDate(payment.createdAt)}
+                  </Typography>
+                </Grid>
+              </Grid>
+              
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  startIcon={<Edit />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/payments/${payment.id}`);
+                  }}
+                >
+                  Edit
+                </Button>
+              </Box>
+            </Paper>
+          </Box>
+        </Collapse>
+      </Box>
     );
   };
 
@@ -913,10 +1078,15 @@ const GroupDetailPage: React.FC = () => {
                         key={`${item.type}-${item.id}`}
                         alignItems="flex-start"
                         divider
+                        sx={{ 
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          py: 1
+                        }}
                       >
                         {item.type === 'expense' 
-                          ? renderExpenseItem(item.data as Expense)
-                          : renderPaymentItem(item.data as Payment)
+                          ? renderExpenseItem(item.data as Expense, item)
+                          : renderPaymentItem(item.data as Payment, item)
                         }
                       </ListItem>
                     ))}
