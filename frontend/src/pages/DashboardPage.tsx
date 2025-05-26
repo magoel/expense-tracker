@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -19,10 +19,6 @@ import {
   Alert,
   TextField,
   InputAdornment,
-  Pagination,
-  FormControl,
-  Select,
-  MenuItem,
   Tab,
   Tabs,
   Chip
@@ -34,8 +30,7 @@ import {
   ArrowForward as ArrowForwardIcon,
   Search as SearchIcon,
   Payments as PaymentsIcon,
-  AccountBalance as AccountBalanceIcon,
-  FilterList as FilterListIcon
+  AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material';
 
 import { api } from '../api';
@@ -128,19 +123,23 @@ const DashboardPage = () => {
     groups: true,
     activity: true,
     balances: true,
+    loadingMore: false,
   });
   const [error, setError] = useState<string | null>(null);
+  const [hasMoreItems, setHasMoreItems] = useState(true);
+  
+  // Reference for infinite scroll
+  const activityEndRef = useRef<HTMLDivElement>(null);
   
   // Activity state
   const [searchTerm, setSearchTerm] = useState('');
   const [activityType, setActivityType] = useState<string>('all');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [pageSize] = useState(10);
   const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>({
     totalCount: 0,
     totalPages: 1,
     currentPage: 1,
-    limit: 5
+    limit: 10
   });
   const [selectedTab, setSelectedTab] = useState(0);
 
@@ -166,6 +165,7 @@ const DashboardPage = () => {
             groups: false,
             activity: false,
             balances: false,
+            loadingMore: false,
           });
         }
       } catch (err) {
@@ -174,18 +174,24 @@ const DashboardPage = () => {
           groups: false,
           activity: false,
           balances: false,
+          loadingMore: false,
         });
       }
     };
 
-    const fetchActivityData = async () => {
-      setLoading(prev => ({ ...prev, activity: true }));
+    const fetchActivityData = async (currentPage = 1, isLoadingMore = false) => {
+      if (isLoadingMore) {
+        setLoading(prev => ({ ...prev, loadingMore: true }));
+      } else {
+        setLoading(prev => ({ ...prev, activity: true }));
+      }
+      
       try {
         // Fetch expenses
         const expensesResponse = await api.get('/expenses/recent', {
           params: { 
-            limit: 100, // Get more initially for client-side filtering/pagination
-            page: 1
+            limit: pageSize, 
+            page: currentPage
           }
         });
         
@@ -201,8 +207,8 @@ const DashboardPage = () => {
         // Fetch payments
         const paymentsResponse = await api.get('/payments/recent', {
           params: {
-            limit: 100, // Get more initially for client-side filtering/pagination
-            page: 1
+            limit: pageSize,
+            page: currentPage
           }
         });
         
@@ -220,30 +226,52 @@ const DashboardPage = () => {
           new Date(b.date).getTime() - new Date(a.date).getTime()
         );
         
-        setAllActivityItems(combined);
+        // Update total counts for pagination
+        const expensesTotal = expensesResponse.data.data.pagination.totalCount;
+        const paymentsTotal = paymentsResponse.data.data.pagination.totalCount;
+        const totalItems = expensesTotal + paymentsTotal;
         
         // Set pagination meta
         setPaginationMeta({
-          totalCount: combined.length,
-          totalPages: Math.ceil(combined.length / pageSize),
-          currentPage: page,
+          totalCount: totalItems,
+          totalPages: Math.ceil(totalItems / pageSize),
+          currentPage: currentPage,
           limit: pageSize
         });
         
-        // Apply initial filtering and pagination
-        applyFiltersAndPagination(combined);
+        // Check if there are more items to load
+        setHasMoreItems(combined.length === pageSize);
+        
+        if (isLoadingMore) {
+          // Append to existing activities
+          setActivityItems(prevItems => [...prevItems, ...combined]);
+          setAllActivityItems(prevItems => [...prevItems, ...combined]);
+        } else {
+          // Replace existing activities
+          setActivityItems(combined);
+          setAllActivityItems(combined);
+        }
+        
+        // Apply filtering if search term or type filter exists
+        if (searchTerm || activityType !== 'all') {
+          applyFiltersAndPagination(isLoadingMore ? [...activityItems, ...combined] : combined);
+        }
         
       } catch (err) {
         console.error('Failed to fetch activity data:', err);
       } finally {
-        setLoading(prev => ({ ...prev, activity: false }));
+        if (isLoadingMore) {
+          setLoading(prev => ({ ...prev, loadingMore: false }));
+        } else {
+          setLoading(prev => ({ ...prev, activity: false }));
+        }
       }
     };
 
     fetchDashboardData();
   }, []);
   
-  // Apply search filters and pagination
+  // Apply search filters
   const applyFiltersAndPagination = (items = allActivityItems) => {
     let filteredItems = [...items];
     
@@ -275,42 +303,153 @@ const DashboardPage = () => {
       filteredItems = filteredItems.filter(item => item.type === activityType);
     }
     
-    // Update pagination metadata
+    // When filtering, we reset to showing the first set of filtered items
+    setActivityItems(filteredItems);
+    
+    // Update pagination metadata and hasMoreItems flag
+    setHasMoreItems(filteredItems.length >= pageSize);
     setPaginationMeta({
       totalCount: filteredItems.length,
       totalPages: Math.ceil(filteredItems.length / pageSize),
-      currentPage: page,
+      currentPage: 1, // Reset to first page when filtering
       limit: pageSize
     });
-    
-    // Apply pagination
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    setActivityItems(filteredItems.slice(start, end));
   };
 
   // Handle search input change
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
-    setPage(1); // Reset to first page when searching
+    setPaginationMeta(prev => ({...prev, currentPage: 1})); // Reset to first page when searching
   };
   
   // Effect for search filtering
   useEffect(() => {
-    applyFiltersAndPagination();
-  }, [searchTerm, activityType, page, pageSize]);
-  
-  // Handle page change
-  const handlePageChange = (_event: React.ChangeEvent<unknown>, value: number) => {
-    setPage(value);
-  };
+    // When search or type filter changes, we need to reset and apply filters
+    if (searchTerm || activityType !== 'all') {
+      applyFiltersAndPagination();
+    } else if (allActivityItems.length > 0) {
+      // If no filters, restore all items from our cache
+      setActivityItems(allActivityItems);
+      setHasMoreItems(allActivityItems.length >= pageSize);
+    }
+  }, [searchTerm, activityType]);
   
   // Handle tab change
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSelectedTab(newValue);
     setActivityType(newValue === 0 ? 'all' : (newValue === 1 ? 'expense' : 'payment'));
-    setPage(1);
+    setPaginationMeta(prev => ({...prev, currentPage: 1}));
+    
+    // Reset items when changing tabs to ensure proper filtering
+    if (newValue === 0) {
+      // 'All' tab - reset filters
+      if (!searchTerm) {
+        setActivityItems(allActivityItems);
+        setHasMoreItems(allActivityItems.length >= pageSize);
+      }
+    } else {
+      // Filtered tabs - apply type filter
+      const newActivityType = newValue === 1 ? 'expense' : 'payment';
+      const filteredItems = allActivityItems.filter(item => item.type === newActivityType);
+      setActivityItems(filteredItems);
+      setHasMoreItems(filteredItems.length >= pageSize);
+    }
   };
+
+  // Function to load more activity items
+  const loadMoreActivities = useCallback(async () => {
+    if (loading.loadingMore || !hasMoreItems) return;
+    
+    const nextPage = paginationMeta.currentPage + 1;
+    
+    // Local implementation of fetchActivityData to avoid dependency issues
+    const loadMoreData = async () => {
+      setLoading(prev => ({ ...prev, loadingMore: true }));
+      
+      try {
+        // Fetch expenses
+        const expensesResponse = await api.get('/expenses/recent', {
+          params: { 
+            limit: pageSize, 
+            page: nextPage
+          }
+        });
+        
+        const expenses = expensesResponse.data.data.expenses.map((expense: Expense) => ({
+          id: expense.id,
+          type: 'expense' as const,
+          date: expense.date,
+          amount: expense.amount,
+          description: expense.description,
+          data: expense
+        }));
+        
+        // Fetch payments
+        const paymentsResponse = await api.get('/payments/recent', {
+          params: {
+            limit: pageSize,
+            page: nextPage
+          }
+        });
+        
+        const payments = paymentsResponse.data.data.payments.map((payment: Payment) => ({
+          id: payment.id,
+          type: 'payment' as const,
+          date: payment.date,
+          amount: payment.amount,
+          description: payment.description || 'Payment',
+          data: payment
+        }));
+        
+        // Combine and sort by date (newest first)
+        const combined = [...expenses, ...payments].sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        
+        // Update pagination meta
+        setPaginationMeta(prev => ({
+          ...prev,
+          currentPage: nextPage
+        }));
+        
+        // Check if there are more items to load
+        setHasMoreItems(combined.length === pageSize);
+        
+        // Append to existing activities
+        setActivityItems(prevItems => [...prevItems, ...combined]);
+        setAllActivityItems(prevItems => [...prevItems, ...combined]);
+        
+      } catch (err) {
+        console.error('Failed to fetch more activity data:', err);
+      } finally {
+        setLoading(prev => ({ ...prev, loadingMore: false }));
+      }
+    };
+    
+    await loadMoreData();
+  }, [loading.loadingMore, hasMoreItems, paginationMeta.currentPage, pageSize]);
+
+  // Set up intersection observer for infinite scrolling
+  useEffect(() => {
+    if (!activityEndRef.current) return;
+    
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMoreItems && !loading.loadingMore) {
+          loadMoreActivities();
+        }
+      },
+      { threshold: 0.5 }
+    );
+    
+    observer.observe(activityEndRef.current);
+    
+    return () => {
+      if (activityEndRef.current) {
+        observer.unobserve(activityEndRef.current);
+      }
+    };
+  }, [hasMoreItems, loading.loadingMore, loadMoreActivities]);
 
   if (loading.groups) {
     return (
@@ -605,14 +744,23 @@ const DashboardPage = () => {
                       })}
                     </List>
                     
-                    {/* Pagination */}
-                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-                      <Pagination 
-                        count={paginationMeta.totalPages} 
-                        page={page}
-                        onChange={handlePageChange} 
-                        color="primary" 
-                      />
+                    {/* Infinite scroll loading indicator and trigger */}
+                    <Box 
+                      ref={activityEndRef}
+                      sx={{ 
+                        py: 2, 
+                        display: 'flex', 
+                        justifyContent: 'center',
+                        visibility: hasMoreItems ? 'visible' : 'hidden'
+                      }}
+                    >
+                      {loading.loadingMore ? (
+                        <CircularProgress size={24} />
+                      ) : hasMoreItems && (
+                        <Button variant="text" onClick={loadMoreActivities}>
+                          Load More
+                        </Button>
+                      )}
                     </Box>
                   </>
                 ) : (

@@ -22,8 +22,6 @@ import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
   Group as GroupIcon,
-  Receipt as ReceiptIcon,
-  Payment as PaymentIcon,
   BarChart as ChartIcon,
   Settings as SettingsIcon,
   AccountCircle,
